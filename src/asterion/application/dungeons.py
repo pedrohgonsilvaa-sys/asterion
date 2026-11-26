@@ -24,7 +24,6 @@ from asterion.application.equipment_configuration import (
 from asterion.application.flagelo_contributions import record_contribution
 from asterion.application.progression import consolidate_character_level
 from asterion.application.road import CHARNECA, RUINS, RoadService
-from asterion.application.social_graph import record_recent_contacts
 from asterion.application.vigor import add_vigor_state, reconcile_character_vigor, utcnow
 from asterion.domain.altos_bastilha_dungeon import (
     ALTOS_BASTILHA_BOSS_CODEX_ENTRY,
@@ -4528,7 +4527,6 @@ class DungeonService:
             for ordinal in range(1, _encounter_count(family.family_id) + 1)
         )
         await session.flush()
-        await record_recent_contacts(session, [row.id for row in characters], now)
         await record_linked_cooccurrence(
             session,
             server_id=self.server_id,

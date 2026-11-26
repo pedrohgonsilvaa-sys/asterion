@@ -124,7 +124,6 @@ async def test_public_profile_has_no_friend_or_block_actions(database):
     for removed in ("so:add", "so:blk", "so:bly", "so:friends", "so:requests", "so:search"):
         await client.click(ANA, f"{removed}:{ids[BEA].hex}")
     assert len(client.alerts()) == 6
-    assert (await client.social.blocked(ANA)).total == 0
 
 
 @pytest.mark.asyncio

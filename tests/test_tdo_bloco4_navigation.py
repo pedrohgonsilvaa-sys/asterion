@@ -165,7 +165,7 @@ def test_refuge_keyboard_follows_source_order_and_grouping():
     )
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     # HUD congelado: Menu Principal em duas colunas, sem Locais avulsos nem NPCs.
-    assert rows[0] == ["🌘 Refúgio", "🧭 Explorar"]
+    assert rows[0] == ["⛰️ Desbravar", "🗺️ Mapa"]
     assert rows[-1] == ["🌐 Comunidade", "⚙️ Configurações"]
     flat = [text for row in rows for text in row]
     for absent in ("Campanha", "Aventura", "← Menu", "Local Atual", "Alda Veyr"):

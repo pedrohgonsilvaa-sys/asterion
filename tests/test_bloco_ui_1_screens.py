@@ -96,11 +96,9 @@ def test_hud_layout_and_menu_order():
     ]
     assert len(blocks) == 3
     assert _labels(screen) == [
-        ["🌘 Refúgio", "🧭 Explorar"],
-        ["🗺️ Mapa", "👤 Personagem"],
-        ["🐺 Caçadas", "🗝️ Masmorras"],
+        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
-        ["🔨 Forja", "🏪 Mercado"],
         ["🌌 Eventos", "📖 Códice"],
         ["🏆 Classificação", "🎁 Benefícios"],
         ["🌐 Comunidade", "⚙️ Configurações"],
@@ -112,7 +110,7 @@ def test_hud_daily_gift_is_full_width_first_row():
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(gift_available=True))
     assert _labels(screen)[0] == ["✨ Resgatar Dádiva Diária"]
-    assert _labels(screen)[1] == ["🌘 Refúgio", "🧭 Explorar"]
+    assert _labels(screen)[1] == ["⛰️ Desbravar", "🗺️ Mapa"]
 
 
 def test_refuge_local_uses_refuge_art_and_lists_services():

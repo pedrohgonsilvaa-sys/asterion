@@ -97,11 +97,9 @@ def refuge_hub_rows(
     lines: list[str] = []
     rows: list[list[InlineKeyboardButton]] = []
     first_row: list[InlineKeyboardButton] = []
-    if explore_remaining == 0:
-        lines.append(f"🧭 Explorar · {TEXT_NOTHING_TO_EXPLORE}")
-    else:
-        lines.append("🧭 Explorar · Revela um Local")
-        first_row.append(InlineKeyboardButton(text="Explorar", callback_data="tdo:explore"))
+    # Decisão do autor: Desbravar é o novo nome de Explorar e abre o menu Desbravar;
+    # todos os Locais já nascem descobertos, então não há mais status de revelação.
+    first_row.append(InlineKeyboardButton(text="Desbravar", callback_data="tdo:explore"))
     first_row.append(InlineKeyboardButton(text="Mapa", callback_data="world:map"))
     rows.append(first_row)
     activities_row: list[InlineKeyboardButton] = []

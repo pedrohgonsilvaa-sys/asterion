@@ -79,6 +79,27 @@ async def reconcile_current_location(
     return target.location_id
 
 
+async def discover_all_locations(session: AsyncSession, character_id) -> None:
+    """Decisão do autor: todos os Locais da Região nascem descobertos e clicáveis.
+
+    Grava a descoberta de Charneca, Bosque, Ruínas e Câmara do Poente (e o registro
+    da Câmara no Códice, como a descoberta por Explorar faz), sem XP. Idempotente.
+    """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    for target in EXPLORE_TARGETS:
+        await session.execute(
+            pg_insert(LocationDiscovery)
+            .values(character_id=character_id, location_id=target.location_id)
+            .on_conflict_do_nothing()
+        )
+    await session.execute(
+        pg_insert(CodexEntry)
+        .values(character_id=character_id, entry_id=CAMARA_CODEX_ENTRY)
+        .on_conflict_do_nothing()
+    )
+
+
 async def _ensure_camara_codex(session: AsyncSession, character_id) -> None:
     has = await session.scalar(
         select(CodexEntry.id).where(

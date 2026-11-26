@@ -175,13 +175,16 @@ from asterion.bot.s33_ui import render_s33
 from asterion.bot.s34_ui import render_s34
 from asterion.bot.s35_ui import render_s35
 from asterion.bot.s36_ui import render_s36
-from asterion.bot.tdo_hub_ui import render_explore_entry, render_explore_result
+from asterion.bot.tdo_hub_ui import render_explore_result
 from asterion.bot.varzeas_missions_ui import render_varzeas_mission
 from asterion.bot.vde_missions_ui import render_vde_mission
 from asterion.bot.world_ui import (
     CLASS_EMOJI,
+    DESBRAVAR_LOCAL_BY_KEY,
+    DESBRAVAR_LOCAL_PREFIX,
     render_adventure,
     render_campaign,
+    render_desbravar,
     render_legacy,
     render_refuge_dashboard,
     render_world,
@@ -1067,24 +1070,63 @@ def world_router(
 
     @router.callback_query(F.data == "tdo:explore")
     async def tdo_explore_entry(query: CallbackQuery):
-        """Entrada de Explorar (Bloco UI 1 §3): status e os três caminhos."""
+        """Menu ⛰️ Desbravar (decisão do autor): Masmorras, Refúgio e os Locais.
+
+        É navegação de interface: abrir o menu não move o personagem.
+        """
         if await foreground(query):
             await query.answer()
             return
         await query.answer()
-        if tdo_explore is None or not isinstance(query.message, Message):
+        if not isinstance(query.message, Message):
             return
         view = await service.resume(query.from_user.id)
-        if view is None or view.location != REFUGE:
+        if view is None or view.location not in HUB_LOCATION_LABELS:
             await restore_context(query)
             return
-        remaining = await tdo_explore.remaining(query.from_user.id)
-        await present(
-            query.message,
-            render_explore_entry(view, remaining=len(remaining) if remaining is not None else None),
-            images,
-            edit=True,
+        await present(query.message, render_desbravar(), images, edit=True)
+
+    @router.callback_query(F.data.startswith(DESBRAVAR_LOCAL_PREFIX))
+    async def tdo_desbravar_local(query: CallbackQuery):
+        """Toque num Local do Desbravar: vai ao Local pelo hub e gera um evento dele.
+
+        A ida segue o hub (TDO v1.0.18 §33.1): de outro Local, primeiro o Refúgio; ida e
+        volta custam 0. O evento é o Desbravar canônico do Local (combate, missão,
+        descoberta ou narrativa). A Câmara do Poente ainda não tem evento: abre a entrada.
+        """
+        if await foreground(query):
+            await query.answer()
+            return
+        if road is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        destination = DESBRAVAR_LOCAL_BY_KEY.get(
+            (query.data or "").removeprefix(DESBRAVAR_LOCAL_PREFIX)
         )
+        view = await acknowledged_road_view(query.from_user.id)
+        if destination is None or view is None or view.location not in HUB_LOCATION_LABELS:
+            await query.answer()
+            await restore_context(query)
+            return
+        if view.location != destination and view.location != REFUGE:
+            view = await road.travel_route(query.from_user.id, REFUGE)
+        if view is not None and view.location != destination:
+            view = await road.travel_route(query.from_user.id, destination)
+        if view is None or view.location != destination:
+            await query.answer("Este Local não está disponível neste momento.", show_alert=True)
+            return
+        if destination == CAMARA:
+            await query.answer()
+            await present(query.message, render_current_local(view), images, edit=True)
+            return
+        event = await road.explore(query.from_user.id)
+        if event is not None and event.kind == "explore_throttle":
+            # 33.2 item 1 / UI 66.2: anti-spam de 3 s, recusado sem efeito.
+            await query.answer("Aguarde um instante.")
+            await present(query.message, render_road(view), images, edit=True)
+            return
+        await query.answer()
+        await present(query.message, render_road(event or view), images, edit=True)
 
     @router.callback_query(F.data == "tdo:explore:go")
     async def tdo_explore_action(query: CallbackQuery):

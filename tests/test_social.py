@@ -1,8 +1,10 @@
-"""Vínculos, blocks, Recentes, Histórias and Relatos (GDD v1.6.0 §31, §49.18)."""
+"""Perfil público, Histórias, Relatos e denúncias (GDD v1.6.0 §31.1, §49.18).
+
+Vínculos (Amigos, Pedidos, Bloqueados, Recentes e Busca) saiu do produto.
+"""
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -18,17 +20,14 @@ from asterion.application.groups import GroupError, GroupService
 from asterion.application.guilds import GuildError, GuildService
 from asterion.application.pvp import PvpError, PvpService
 from asterion.application.social import ContentModerationAdmin, SocialError, SocialService
-from asterion.application.social_graph import blocked_between, record_recent_contacts
 from asterion.application.trades import TradeError, TradeService
-from asterion.domain.social import MAX_FRIENDS, STORY_SHARE_COOLDOWN
+from asterion.domain.social import STORY_SHARE_COOLDOWN
 from asterion.infrastructure.db.models import (
     Account,
     Character,
+    CharacterBlock,
     CharacterProfile,
     ContentReport,
-    FriendRequest,
-    Friendship,
-    GuildInvite,
     Relato,
 )
 
@@ -84,183 +83,41 @@ async def _set_history(database, character_id, text: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_friend_request_flow_and_guards(database):
+async def test_old_blocks_no_longer_stop_direct_invites_or_acceptance(database):
+    """Vínculos saiu do produto: bloqueios gravados antes não afetam Grupo, Guilda,
+    Troca nem Duelo (decisão do autor)."""
     ids = await _seed(database)
-    service = _service(database)
-    await service.send_request(ANA, ids[BEA], now=NOW)
-    await service.send_request(ANA, ids[BEA], now=NOW)  # idempotent
-    assert await _code(service.send_request(BEA, ids[ANA], now=NOW)) == "incoming_pending"
-    assert await _code(service.send_request(ANA, ids[ANA], now=NOW)) == "self"
-
-    requests = await service.requests(BEA)
-    assert [item.card.name for item in requests.incoming] == ["Ana"]
-    await service.respond_request(BEA, requests.incoming[0].request_id, accept=True, now=NOW)
-
-    assert [card.name for card in (await service.friends(ANA)).cards] == ["Bea"]
-    assert [card.name for card in (await service.friends(BEA)).cards] == ["Ana"]
-    assert await _code(service.send_request(ANA, ids[BEA], now=NOW)) == "already_friends"
-    await service.remove_friend(ANA, ids[BEA])
-    assert (await service.friends(BEA)).total == 0
-
-
-@pytest.mark.asyncio
-async def test_only_the_recipient_answers_and_only_the_sender_cancels(database):
-    ids = await _seed(database)
-    service = _service(database)
-    await service.send_request(ANA, ids[BEA], now=NOW)
-    request_id = (await service.requests(ANA)).outgoing[0].request_id
-    assert await _code(service.respond_request(ANA, request_id, accept=True)) == "request_gone"
-    assert await _code(service.cancel_request(BEA, request_id)) == "request_gone"
-    await service.cancel_request(ANA, request_id)
-    assert await _code(service.cancel_request(ANA, request_id)) == "request_gone"
-
-
-@pytest.mark.asyncio
-async def test_request_limits_come_from_section_49(database):
-    ids = await _seed(database, extra=31)
-    service = _service(database)
-    for index in range(20):
-        await service.send_request(ANA, ids[880000 + index], now=NOW)
-    assert await _code(service.send_request(ANA, ids[880020], now=NOW)) == "sent_full"
     async with database[1].begin() as session:
-        await session.execute(FriendRequest.__table__.delete())
-    for index in range(30):
-        await service.send_request(880000 + index, ids[BEA], now=NOW)
-    assert await _code(service.send_request(880030, ids[BEA], now=NOW)) == "target_full"
-
-
-@pytest.mark.asyncio
-async def test_friend_limit_is_enforced_for_both_sides(database):
-    ids = await _seed(database)
-    filler = await _seed_many(database, MAX_FRIENDS)
-    async with database[1].begin() as session:
-        for other in filler:
-            first, second = sorted((ids[ANA], other))
-            session.add(Friendship(character_a=first, character_b=second, created_at=NOW))
-    service = _service(database)
-    assert await _code(service.send_request(ANA, ids[BEA], now=NOW)) == "friends_full"
-    assert await _code(service.send_request(BEA, ids[ANA], now=NOW)) == "target_full"
-
-
-async def _seed_many(database, count: int) -> list:
-    ids = []
-    async with database[1].begin() as session:
-        for index in range(count):
-            actor = 890000 + index
-            session.add(Account(telegram_id=actor))
-            character = Character(
-                telegram_id=actor,
-                server_id=SERVER,
-                name=_name("Filler", index),
-                race="remanescente",
-                character_class="sentinela",
-                stage="menu",
-                ruleset_version="tdo-1.0.15",
-                hp=Decimal("100"),
-                max_hp=Decimal("100"),
+        for blocker, blocked in ((BEA, ANA), (ANA, CAI), (CAI, ANA)):
+            session.add(
+                CharacterBlock(
+                    blocker_character_id=ids[blocker],
+                    blocked_character_id=ids[blocked],
+                    created_at=NOW,
+                )
             )
-            session.add(character)
-            await session.flush()
-            ids.append(character.id)
-    return ids
-
-
-@pytest.mark.asyncio
-async def test_concurrent_requests_cannot_exceed_the_limit(database):
-    ids = await _seed(database, extra=25)
-    service = _service(database)
-    results = await asyncio.gather(
-        *(service.send_request(ANA, ids[880000 + index], now=NOW) for index in range(25)),
-        return_exceptions=True,
-    )
-    refused = [item for item in results if isinstance(item, SocialError)]
-    assert len(refused) == 5 and {item.code for item in refused} == {"sent_full"}
-    assert len((await service.requests(ANA)).outgoing) == 20
-
-
-@pytest.mark.asyncio
-async def test_block_clears_links_and_stops_every_direct_invite(database):
-    ids = await _seed(database)
-    service = _service(database)
-    await service.send_request(ANA, ids[BEA], now=NOW)
-    request_id = (await service.requests(BEA)).incoming[0].request_id
-    await service.respond_request(BEA, request_id, accept=True, now=NOW)
-    await service.send_request(ANA, ids[CAI], now=NOW)
 
     groups = GroupService(database[1], SERVER)
     await groups.create_group(ANA)
+    await groups.invite(ANA, "Bea")
     guilds = GuildService(database[1], SERVER)
     await guilds.create_guild(ANA, "Vigilia", "VGL", now=NOW)
-    invite = await guilds.invite(ANA, "Cai", now=NOW)
-
-    await service.block(CAI, ids[ANA], now=NOW)
-    await service.block(BEA, ids[ANA], now=NOW)
-    await service.block(BEA, ids[ANA], now=NOW)  # idempotent
-
-    assert (await service.friends(ANA)).total == 0
-    assert (await service.requests(ANA)).outgoing == ()
-    async with database[1]() as session:
-        assert (await session.get(GuildInvite, invite.invite_id)).status == "cancelled"
-        assert await blocked_between(session, ids[ANA], ids[BEA])
-        assert await blocked_between(session, ids[BEA], ids[ANA])
-
-    # §31 lists friendship, Group, Trade and Guild; the Duel is the author's decision.
-    assert await _code(service.send_request(ANA, ids[BEA], now=NOW)) == "unavailable"
-    assert await _code(groups.invite(ANA, "Bea")) == "invite_refused"
-    assert await _code(guilds.invite(ANA, "Bea", now=NOW)) == "invite_refused"
-    trades = TradeService(database[1], SERVER)
-    assert await _code(trades.invite(ANA, "Bea", now=NOW)) == "partner_unavailable"
-    pvp = PvpService(database[1], SERVER)
-    assert await _code(pvp.challenge(ANA, ids[BEA], now=NOW)) == "opponent_busy"
-
-    await service.unblock(BEA, ids[ANA])
-    await service.send_request(ANA, ids[BEA], now=NOW)
-
-
-@pytest.mark.asyncio
-async def test_block_after_invite_stops_acceptance(database):
-    ids = await _seed(database)
-    service = _service(database)
+    await guilds.invite(ANA, "Bea", now=NOW)
     trades = TradeService(database[1], SERVER)
     trade = await trades.invite(ANA, "Bea", now=NOW)
+    await trades.respond(BEA, trade.trade_id, accept=True, now=NOW)
     pvp = PvpService(database[1], SERVER)
     duel = await pvp.challenge(ANA, ids[CAI], now=NOW)
-
-    await service.block(ANA, ids[BEA], now=NOW)
-    await service.block(ANA, ids[CAI], now=NOW)
-
-    assert await _code(trades.respond(BEA, trade.trade_id, accept=True, now=NOW)) == (
-        "trade_unavailable"
-    )
-    assert await _code(pvp.accept(CAI, duel.view.match_id, now=NOW)) == "expired"
+    await pvp.accept(CAI, duel.view.match_id, now=NOW)
 
 
-@pytest.mark.asyncio
-async def test_recents_keep_the_last_14_days_only(database):
-    ids = await _seed(database)
-    service = _service(database)
-    async with database[1].begin() as session:
-        await record_recent_contacts(session, [ids[ANA], ids[BEA]], NOW - timedelta(days=13))
-    async with database[1].begin() as session:
-        await record_recent_contacts(session, [ids[ANA], ids[CAI]], NOW)
-
-    names = [card.name for card in (await service.recents(ANA, now=NOW)).cards]
-    assert names == ["Cai", "Bea"]
-    later = NOW + timedelta(days=2)
-    assert [c.name for c in (await service.recents(ANA, now=later)).cards] == ["Cai"]
-
-
-@pytest.mark.asyncio
-async def test_search_is_prefix_based_rate_limited_and_escapes_wildcards(database):
-    await _seed(database)
-    service = _service(database)
-    assert [card.name for card in await service.search(ANA, "be", now=NOW)] == ["Bea"]
-    assert await service.search(ANA, "%%", now=NOW) == ()
-    assert await _code(service.search(ANA, "a", now=NOW)) == "query_invalid"
-    for _ in range(18):
-        await service.search(ANA, "ca", now=NOW)
-    assert await _code(service.search(ANA, "ca", now=NOW)) == "search_rate_limited"
-    assert await service.search(ANA, "ca", now=NOW + timedelta(seconds=61))
+def test_vinculos_service_api_is_gone():
+    service_methods = set(dir(SocialService))
+    for gone in (
+        "search", "send_request", "respond_request", "cancel_request", "remove_friend",
+        "block", "unblock", "friends", "blocked", "recents", "requests",
+    ):
+        assert gone not in service_methods
 
 
 @pytest.mark.asyncio

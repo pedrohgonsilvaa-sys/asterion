@@ -161,19 +161,16 @@ def test_menu_layout_two_columns():
     screen = _screen()
     rows = [[b.text for b in row] for row in screen.keyboard.inline_keyboard]
     assert rows == [
-        ["🌘 Refúgio", "🧭 Explorar"],
-        ["🗺️ Mapa", "👤 Personagem"],
-        ["🐺 Caçadas", "🗝️ Masmorras"],
+        ["⛰️ Desbravar", "🗺️ Mapa"],
+        ["👤 Personagem", "🏪 Mercado"],
         ["🏟️ Arena", "🏰 Guilda"],
-        ["🔨 Forja", "🏪 Mercado"],
         ["🌌 Eventos", "📖 Códice"],
         ["🏆 Classificação", "🎁 Benefícios"],
         ["🌐 Comunidade", "⚙️ Configurações"],
     ]
     pairs = {b.text: b.callback_data for b in _buttons(screen)}
     assert pairs["🌌 Eventos"] == "wev:hub"
-    assert pairs["🌘 Refúgio"] == "refuge:local"  # só navegação: não move o personagem
-    assert pairs["🔨 Forja"] == "craft:root"
+    assert pairs["⛰️ Desbravar"] == "tdo:explore"  # só navegação: não move o personagem
 
 
 def test_daily_gift_button_only_when_available_and_alone_on_first_row():
@@ -318,5 +315,5 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
     assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
     assert "✨ Resgatar Dádiva Diária" not in labels()
-    assert labels()[0] == "🌘 Refúgio"
+    assert labels()[0] == "⛰️ Desbravar"
     await bot.session.close()

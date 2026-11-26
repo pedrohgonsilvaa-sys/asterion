@@ -188,19 +188,60 @@ CLASS_EMOJI = {
 REFUGE_TITLE = "🌘 Refúgio do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
 DAILY_GIFT_BUTTON = "✨ Resgatar Dádiva Diária"
-# Menu Principal (Contrato Mestre de Telas UI v1.0.0 §5): Dádiva Diária em largura
-# total, depois duas colunas. Missões não ficam aqui: entram pelo Mural do Refúgio.
+# Menu Principal (decisão fechada do autor): Dádiva Diária em largura total, depois duas
+# colunas. A Forja fica dentro do Mercado; Refúgio, Caçadas e Masmorras saem daqui
+# (Refúgio e Masmorras entram pelo Desbravar). Missões entram pelo Mural do Refúgio.
+DESBRAVAR_ENTRY = "tdo:explore"
 REFUGE_MENU = (
-    (("🌘 Refúgio", "refuge:local"), ("🧭 Explorar", "tdo:explore")),
-    (("🗺️ Mapa", "world:map"), ("👤 Personagem", "character:root")),
-    (("🐺 Caçadas", "tdo:hunt"), ("🗝️ Masmorras", "dungeon:known")),
+    (("⛰️ Desbravar", DESBRAVAR_ENTRY), ("🗺️ Mapa", "world:map")),
+    (("👤 Personagem", "character:root"), ("🏪 Mercado", "mkt:root")),
     (("🏟️ Arena", "pvp:hub"), ("🏰 Guilda", "guild:root")),
-    # Não há tela de Forja própria: a entrada abre a Criação de itens existente.
-    (("🔨 Forja", "craft:root"), ("🏪 Mercado", "mkt:root")),
     (("🌌 Eventos", "wev:hub"), ("📖 Códice", "knowledge:codex")),
     (("🏆 Classificação", "pvp:rank"), ("🎁 Benefícios", "bn:root")),
     (("🌐 Comunidade", "community:open"), ("⚙️ Configurações", "settings:root")),
 )
+
+DESBRAVAR_TEXT = (
+    "As Terras do Ocaso se estendem além das trilhas conhecidas. Estradas cobertas de "
+    "cinza, campos de fuligem, bosques consumidos pelo fogo e antigas estruturas de pedra "
+    "guardam caminhos que ainda não revelaram tudo o que escondem. Entre rotas conhecidas e "
+    "passagens esquecidas, cada descoberta pode levar a um novo lugar, um encontro "
+    "inesperado ou uma ameaça à espreita."
+)
+DESBRAVAR_LOCAL_PREFIX = "tdo:desb:"
+# Botão, rótulo do Local e chave de callback, na ordem fechada pelo autor.
+DESBRAVAR_LOCALS = (
+    ("🔥 Estrada das Cinzas", "Estrada das Cinzas", "road"),
+    ("🌑 Charneca da Fuligem", "Charneca da Fuligem", "charneca"),
+    ("🌲 Bosque Calcinado", "Bosque Calcinado", "bosque"),
+    ("🏚️ Ruínas do Vigia", "Ruínas do Vigia", "ruinas"),
+    ("🌒 Câmara do Poente", "Câmara do Poente", "camara"),
+)
+DESBRAVAR_LOCAL_BY_KEY = {key: label for _button, label, key in DESBRAVAR_LOCALS}
+
+
+def render_desbravar() -> Screen:
+    """Menu ⛰️ Desbravar: Masmorras, Refúgio do Ocaso e os Locais da Região."""
+    from asterion.bot.ui_format import back, blocks, button, keyboard, narrative
+
+    locals_ = [
+        button(text, f"{DESBRAVAR_LOCAL_PREFIX}{key}") for text, _label, key in DESBRAVAR_LOCALS
+    ]
+    return Screen(
+        blocks("<b>🧭 Desbravar</b>", narrative(DESBRAVAR_TEXT)),
+        REFUGE_IMAGE_KEY,
+        keyboard(
+            [
+                button("🗝️ Masmorras", "dungeon:known"),
+                button("🌘 Refúgio do Ocaso", "refuge:local"),
+            ],
+            locals_[0:2],
+            locals_[2:4],
+            locals_[4:5],
+            back("menu:back"),
+        ),
+        "HTML",
+    )
 
 
 def roman(value: int) -> str:
