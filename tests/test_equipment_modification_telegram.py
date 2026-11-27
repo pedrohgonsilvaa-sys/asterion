@@ -141,11 +141,19 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     screen = await _click(dispatcher, bot, f"eq:v:{item_id.hex}", actor=actor, update_id=index)
     index += 1
     assert "Elmo de Fuligem" in screen.text
-    # UI aprovada: o detalhe não expõe ações da Forja; os callbacks do domínio continuam
-    # funcionando e são acionados aqui diretamente.
+    # O detalhe não expõe ações da Forja; elas vivem na Forja do Mercado.
     labels = [button.text for row in screen.reply_markup.inline_keyboard for button in row]
     assert not {"🔮 Runas", "✨ Encantamento", "🔨 Aprimorar", "🔧 Desmontar"} & set(labels)
     token = item_id.hex
+    screen = await _click(dispatcher, bot, "forge:root", actor=actor, update_id=index)
+    index += 1
+    assert screen.text.startswith("<b>🔨 Forja</b>") and "Elmo de Fuligem" in screen.text
+    screen = await _click(dispatcher, bot, f"forge:i:{token}", actor=actor, update_id=index)
+    index += 1
+    labels = [button.text for row in screen.reply_markup.inline_keyboard for button in row]
+    assert labels[:4] == ["🔮 Runas", "✨ Encantamento", "🔨 Aprimorar", "🔧 Desmontar"]
+    assert labels[-1] == "↩️ Retornar"
+    assert not {"🚫 Bloquear", "⭐ Favoritar"} & set(labels)
 
     screen = await _click(dispatcher, bot, f"em:h:{token}", actor=actor, update_id=index)
     index += 1
@@ -187,7 +195,7 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
         actor=actor, update_id=index,
     )
     index += 1
-    assert "Persistência" in screen.text
+    assert screen.text.startswith("<b>🔨 Forja</b>")
 
     screen = await _click(dispatcher, bot, f"em:e:{token}", actor=actor, update_id=index)
     index += 1
@@ -206,12 +214,13 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
         actor=actor, update_id=index,
     )
     index += 1
-    assert "Pele de Pedra" in screen.text
+    assert screen.text.startswith("<b>🔨 Forja</b>")
 
     screen = await _click(
         dispatcher, bot, f"eq:v:{item_id.hex}", actor=actor, update_id=index,
     )
     index += 1
+    assert "Persistência" in screen.text and "Pele de Pedra" in screen.text
     screen = await _click(
         dispatcher, bot, _button(screen, "⭐ Favoritar").callback_data,
         actor=actor, update_id=index,

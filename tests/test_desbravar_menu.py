@@ -60,7 +60,8 @@ def test_forge_lives_inside_the_market():
     callbacks = {
         b.text: b.callback_data for row in render_root(None).keyboard.inline_keyboard for b in row
     }
-    assert callbacks["🔨 Forja"] == "craft:root"
+    assert callbacks["🧰 Ofícios"] == "craft:root"
+    assert callbacks["🔨 Forja"] == "forge:root"
 
 
 def test_desbravar_menu_layout_and_text():
@@ -162,3 +163,13 @@ async def test_camara_is_clickable_and_opens_its_entry(database):
     assert "Câmara do Poente" in screen.text
     async with sessions() as session:
         assert await session.scalar(select(func.count(ExplorationAttempt.id))) == 0
+
+
+def test_market_has_forja_for_equipment_and_oficios_for_crafting():
+    rows = [[b.text for b in row] for row in render_root(None).keyboard.inline_keyboard]
+    assert rows == [
+        ["🔎 Buscar Loja", "🏪 Minha Loja"],
+        ["🤝 Troca Direta", "🧰 Ofícios"],
+        ["🔨 Forja", "📦 Armazém"],
+        ["↩️ Retornar"],
+    ]

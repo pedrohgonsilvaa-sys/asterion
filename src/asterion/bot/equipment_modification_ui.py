@@ -61,7 +61,7 @@ def _button(label: str, callback: str) -> InlineKeyboardButton:
 
 
 def _back(item_id: str) -> list[InlineKeyboardButton]:
-    return [_button("← Equipamento", f"eq:v:{item_id}")]
+    return [_button("← Forja", f"forge:i:{item_id}")]
 
 
 def _base36(value: int) -> str:

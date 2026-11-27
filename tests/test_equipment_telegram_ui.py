@@ -497,3 +497,36 @@ def test_inventory_equipment_rows_open_detail_and_hide_zero_enhancement():
     )
     assert "#1 ⚪️ <b>Lâmina de Teste</b>" in screen.text and "+0" not in screen.text
     assert _buttons(screen)[0].callback_data == f"eq:v:{item_id.hex}"
+
+
+def test_forge_lists_equipment_and_item_screen_exposes_the_forge_actions():
+    from asterion.bot.forge_ui import render_forge_item, render_forge_list
+
+    item_id = uuid4()
+    entries = (
+        InventoryEntry(kind="equipment", key=str(item_id), title="Adaga", rarity="Comum",
+                       slot="main_hand", payload={"enhancement": 2}),
+        InventoryEntry(kind="material", key="material.tdo.ferro_de_fuligem", title="Ferro"),
+    )  # fmt: skip
+    listing = render_forge_list(entries)
+    assert listing.text.startswith("<b>🔨 Forja</b>")
+    assert "#1 ⚪️ <b>Adaga +2</b>" in listing.text and "Ferro" not in listing.text
+    assert [b.callback_data for b in _buttons(listing)] == [
+        f"forge:i:{item_id.hex}", "mkt:root",
+    ]  # fmt: skip
+    assert "Nenhum equipamento" in render_forge_list(()).text
+
+    item = _item(enhancement=3)
+    screen = render_forge_item(EquipmentDetailView(uuid4(), 20, 1, item))
+    assert _texts(screen) == [
+        ["🔮 Runas", "✨ Encantamento"], ["🔨 Aprimorar", "🔧 Desmontar"], ["↩️ Retornar"],
+    ]  # fmt: skip
+    assert _buttons(screen)[0].callback_data == f"em:r:{item.item_instance_id.hex}"
+    protected = render_forge_item(
+        EquipmentDetailView(uuid4(), 20, 1, replace_item(item, favorite=True))
+    )
+    assert "🔧 Desmontar" not in [b.text for b in _buttons(protected)]
+    maxed = render_forge_item(
+        EquipmentDetailView(uuid4(), 20, 1, replace_item(item, enhancement=10))
+    )
+    assert "🔨 Aprimorar" not in [b.text for b in _buttons(maxed)]

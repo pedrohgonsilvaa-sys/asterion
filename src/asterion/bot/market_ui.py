@@ -192,8 +192,8 @@ def render_root(trade: TradeView | None) -> Screen:
         IMAGE_KEY,
         _keyboard(
             [_button("🔎 Buscar Loja", "mkt:search"), _button("🏪 Minha Loja", "mkt:mine")],
-            [_button("🤝 Troca Direta", "trd:root"), _button("🔨 Forja", "craft:root")],
-            [_button("📦 Armazém", "warehouse:root:market")],
+            [_button("🤝 Troca Direta", "trd:root"), _button("🧰 Ofícios", "craft:root")],
+            [_button("🔨 Forja", "forge:root"), _button("📦 Armazém", "warehouse:root:market")],
             [_button("↩️ Retornar", "menu:back")],
         ),
         "HTML",
