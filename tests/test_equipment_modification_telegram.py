@@ -141,7 +141,8 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     screen = await _click(dispatcher, bot, f"eq:v:{item_id.hex}", actor=actor, update_id=index)
     index += 1
     assert "Elmo de Fuligem" in screen.text
-    assert "🔮 Runas" in [button.text for row in screen.reply_markup.inline_keyboard for button in row]
+    labels = [button.text for row in screen.reply_markup.inline_keyboard for button in row]
+    assert "🔮 Runas" in labels
 
     screen = await _click(
         dispatcher, bot, _button(screen, "🔨 Aprimorar").callback_data, actor=actor,
