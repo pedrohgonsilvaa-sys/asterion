@@ -16,7 +16,6 @@ from asterion.application.round import RoundService
 from asterion.bot.character_progression_ui import (
     _art_mechanics_lines,
     render_art_detail,
-    render_art_slot_choice,
 )
 from asterion.bot.combat_ui import event_line
 from asterion.bot.doctrines_ui import doctrine_art_ids
@@ -48,6 +47,7 @@ from asterion.infrastructure.db.models import (
     Character,
     CharacterActiveArtSlot,
 )
+from tests.ui_plain import plain
 
 SOLAR = LUMINAR_ART_IDS["explosao_solar"]
 
@@ -465,14 +465,11 @@ async def test_solar_level_gate_configuration_persistence_doctrine_and_ui(databa
     eligible = await service.view(actor)
     assert eligible is not None and SOLAR in eligible.available_art_ids
     screen = render_art_detail(eligible, SOLAR)
-    assert "Explosão Solar" in screen.text
-    assert "85% ATQ" in screen.text
-    assert "Todos os Inimigos" in screen.text
-    assert "Recarga · 3 Rodadas" in screen.text
-    assert "Requisito de arma · Nenhum" in screen.text
-    slot_screen = render_art_slot_choice(eligible, SOLAR)
-    assert "85% ATQ" in slot_screen.text
-    assert "Requisito de arma · Nenhum" in slot_screen.text
+    assert "Explosão Solar" in plain(screen.text)
+    assert "85% ATQ" in plain(screen.text)
+    assert "Todos os Inimigos" in plain(screen.text)
+    assert "Recarga · 3 Rodadas" in plain(screen.text)
+    assert "Requisito de arma" not in plain(screen.text)
 
     await service.equip_art(actor, 3, SOLAR)
     async with sessions.begin() as session:

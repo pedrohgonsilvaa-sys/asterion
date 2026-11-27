@@ -142,5 +142,5 @@ def test_warehouse_back_follows_its_origin():
         # Decisão do autor 2026-11-26 §4.2/§8.1: o Armazém fica no Mercado.
         assert _callbacks(from_refuge)[-1] == "mkt:root"
         from_inventory = render_warehouse(view)
-        assert _labels(from_inventory)[-1] == ["← Inventário"]
+        assert _labels(from_inventory)[-1] == ["↩️ Retornar"]
         assert _callbacks(from_inventory)[-1] == "inventory:root"

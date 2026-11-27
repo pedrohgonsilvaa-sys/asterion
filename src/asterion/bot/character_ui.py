@@ -30,13 +30,15 @@ from asterion.bot.world_ui import CLASS_EMOJI
 LEGACY_LEVEL = 60
 # Decisão do autor 2026-11-26 §6: atributos aparecem na própria tela; os botões são
 # Equipamentos/Inventário, Artes/Talentos, Doutrinas/Perfil e Cosméticos/Feitos.
+# Especificação consolidada 2026-11-26, Parte IV §8: não existe mais tela Perfil;
+# a entrada abre direto a História.
 CHARACTER_BUTTONS = (
     ("⚔️ Equipamentos", "eq:r"),
     ("🎒 Inventário", "inventory:root"),
     ("✨ Artes", "character:arts"),
     ("🌿 Talentos", "character:talents"),
     ("🧩 Doutrinas", "character:doctrines"),
-    ("🪪 Perfil", "character:profile"),
+    ("📖 História", "character:profile"),
     ("🎨 Cosméticos", "character:cosmetics"),
     ("🏆 Feitos", "kb:a"),
 )

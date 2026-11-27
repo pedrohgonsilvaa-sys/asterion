@@ -19,7 +19,6 @@ from asterion.application.talents import (
     TalentService,
 )
 from asterion.bot.character_progression_ui import render_talent_detail
-from asterion.bot.doctrines_ui import render_talent_choices
 from asterion.domain.arts import (
     CONJURADOR_ART_IDS,
     ERRANTE_ART_IDS,
@@ -49,6 +48,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     WorldState,
 )
+from tests.ui_plain import doctrine_talent_choices
 
 D = Decimal
 CLASS_ORDER = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -284,16 +284,12 @@ async def test_nv55_doctrine_respec_and_configuration_lock(database):
     doctrine = next(
         item for item in collection.doctrines if item.doctrine_id == created.doctrine_id
     )
-    picker = render_talent_choices(collection, doctrine, 1)
+    picker = doctrine_talent_choices(collection, doctrine)
     for talent_id in TIER55["luminar"]:
         definition = next(
             item for item in TALENTS_BY_CLASS["luminar"] if item.talent_id == talent_id
         )
-        assert any(
-            definition.name in button.text
-            for row in picker.keyboard.inline_keyboard
-            for button in row
-        )
+        assert definition.name in picker
     edited = await doctrines.update_component(
         actor,
         created.doctrine_id,

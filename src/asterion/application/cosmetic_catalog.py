@@ -14,6 +14,10 @@ class CosmeticDefinition:
     name: str
     achievement_id: str | None
     origin_label: str | None = None
+    # Especificação consolidada 2026-11-26, Parte IV §3–§5: Raridade e descrição só
+    # aparecem quando a Fonte as define; nenhum valor é inventado.
+    rarity: str | None = None
+    description: str | None = None
 
     @property
     def origin(self) -> str:
@@ -301,14 +305,44 @@ COSMETIC_TYPE_NOUNS = {
     "title": "Título",
     "frame": "Moldura",
 }
+# Parte IV §8: ``✅ Usar`` é o padrão para equipar cosméticos.
 COSMETIC_USE_BUTTONS = {
-    "appearance": "Equipar",
-    "title": "Usar Título",
-    "frame": "Usar Moldura",
+    "appearance": "✅ Usar",
+    "title": "✅ Usar",
+    "frame": "✅ Usar",
 }
 # Player-facing name of the starting appearance (UI 7). It is not a catalog entry:
 # it is what the character shows when no Appearance is selected.
-DEFAULT_APPEARANCE_NAME = "Viajante de Asterion · Padrão"
+DEFAULT_APPEARANCE_NAME = "Viajante de Asterion"
+
+
+@dataclass(frozen=True, slots=True)
+class InitialCosmetic:
+    """Aparência e Título iniciais: não são itens do catálogo, valem sem seleção."""
+
+    name: str
+    description: str
+    rarity: str
+    origin: str
+    closing: str | None = None
+
+
+# Textos, Raridade e Origem fechados na especificação consolidada (Parte IV §3.1, §4.1).
+INITIAL_APPEARANCE = InitialCosmetic(
+    DEFAULT_APPEARANCE_NAME,
+    "O visual simples de quem atravessa Asterion sem pertencer a lugar algum.",
+    "Comum",
+    "Aparência Inicial",
+    "Uma aparência marcada pela estrada, pelas cinzas e pelos primeiros passos de uma "
+    "longa jornada.",
+)
+INITIAL_TITLE = InitialCosmetic(
+    "Caminhante das Cinzas",
+    "O primeiro título de quem atravessou as cinzas e encontrou um caminho onde antes "
+    "havia apenas ruínas.",
+    "Comum",
+    "Prólogo",
+)
 # Legacy TDO cosmetics converted to their canonical equivalent (GDD 33.4, TDO 17).
 LEGACY_COSMETIC_CONVERSIONS = {
     "cosmetic.emblem.tdo.nome_apagado": "cosmetic.title.tdo.nome_apagado",

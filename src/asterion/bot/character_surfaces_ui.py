@@ -7,6 +7,7 @@ from decimal import Decimal
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.character_surfaces import (
+    AchievementView,
     AttributesView,
     BestiaryRecordView,
     CodexEntryView,
@@ -15,6 +16,8 @@ from asterion.application.character_surfaces import (
 )
 from asterion.application.knowledge_catalog import (
     ACHIEVEMENT_CATEGORIES,
+    ACHIEVEMENT_CATEGORY_DESCRIPTIONS,
+    ACHIEVEMENTS,
     ALTOS_REGION_ID,
     ALTOS_REGION_LABEL,
     CODEX_CATEGORY_ORDER,
@@ -133,35 +136,42 @@ def render_attributes(view: AttributesView) -> Screen:
     return Screen("\n".join(lines), "character", keyboard, parse_mode="HTML")
 
 
-def render_profile(view: ProfileView) -> Screen:
-    lines = [
-        "📇 Perfil",
-        "",
-        *_identity(view.name, view.level, view.character_class, view.selected_path),
-    ]
-    if view.selected_title:
-        from html import escape as _escape
+# Especificação consolidada 2026-11-26, Parte IV §1: não existe mais tela Perfil;
+# História é a tela acessível direto pelo Personagem.
+HISTORY_TITLE = "📖 História"
+HISTORY_TEXT = (
+    "Conte quem o personagem era, o que encontrou pelo caminho e o que ainda busca em "
+    "Asterion."
+)
+HISTORY_WRITE = "✍️ Escrever"
+HISTORY_INPUT = "✍️ Envie a História do personagem."
 
-        lines.extend(["", f"🎖️ <code>{_escape(view.selected_title)}</code>"])
-    lines.extend(["", "📖 História", ""])
+
+def render_history(
+    view: ProfileView, *, writing: bool = False, notice: str | None = None
+) -> Screen:
+    """História do personagem; ``writing`` é a mesma tela no estado de entrada de texto."""
+    from html import escape
+
+    parts = [f"<b>{escape(HISTORY_TITLE)}</b>", f"<i>{escape(HISTORY_TEXT)}</i>"]
     if view.history:
-        from html import escape
-
-        lines.append(escape(view.history))
-        button = "Editar História"
+        parts.append(f"<blockquote>{escape(view.history)}</blockquote>")
+    if writing:
+        if notice:
+            parts.append(escape(notice))
+        parts.append(escape(HISTORY_INPUT))
+        rows = [[_button(CODEX_BACK, "character:profile")]]
     else:
-        lines.append(
-            "Conte quem seu personagem era, o que encontrou pelo caminho "
-            "e o que ainda busca em Asterion."
-        )
-        button = "Escrever História"
-    rows = [[_button(button, f"profile:edit:{_base36(view.revision)}")]]
-    if view.history:
-        rows.append([_button("Compartilhar História", "so:share")])
-        rows.append([_button("Remover História", f"profile:rm:{_base36(view.revision)}")])
-    rows.append([_button("← Personagem", "character:root")])
-    keyboard = _keyboard(rows)
-    return Screen("\n".join(lines), "character", keyboard, parse_mode="HTML")
+        rows = [
+            [_button(HISTORY_WRITE, f"profile:edit:{_base36(view.revision)}")],
+            [_button(CODEX_BACK, "character:root")],
+        ]
+    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
+
+
+def render_profile(view: ProfileView) -> Screen:
+    """Compatibilidade com ``/perfil``: abre a tela de História."""
+    return render_history(view)
 
 
 # Contrato Mestre de Telas UI v1.0.0 §20: Códice de Asterion.
@@ -370,40 +380,118 @@ def render_bestiary_detail(view: KnowledgeView, record: BestiaryRecordView) -> S
     return Screen("\n".join(lines), "bestiary", _keyboard(rows))
 
 
+# Especificação consolidada 2026-11-26, Parte IV §6–§7.
+ACHIEVEMENTS_TITLE = "🏆 Feitos"
+ACHIEVEMENTS_TEXT = (
+    "Registre as conquistas que marcaram sua jornada e os momentos que deixaram sua "
+    "marca em Asterion."
+)
+ACHIEVEMENTS_EMPTY = "Nenhum Feito foi conquistado ainda."
+ACHIEVEMENTS_PER_PAGE = 5
+ACHIEVEMENT_INDEX = {entry.achievement_id: index for index, entry in enumerate(ACHIEVEMENTS)}
+
+
+def _achievement_screen(*parts: str | None, rows) -> Screen:
+    return Screen(
+        "\n\n".join(part for part in parts if part),
+        "achievements",
+        _keyboard(rows),
+        parse_mode="HTML",
+    )
+
+
+def _category_parts(category: str) -> tuple[str, str]:
+    """(emoji, nome) da categoria: ``🧭 Exploração`` → ``("🧭", "Exploração")``."""
+    emoji, name = dict(ACHIEVEMENT_CATEGORIES)[category].split(" ", 1)
+    return emoji, name
+
+
+def _achievement_emoji(entry: AchievementView) -> str:
+    return entry.emoji or _category_parts(entry.category)[0]
+
+
 def render_achievement_root(view: KnowledgeView) -> Screen:
-    lines = ["🏆 Feitos", ""]
-    present = {entry.category for entry in view.achievements}
-    rows = []
-    if not view.achievements:
-        lines.append("Nenhum Feito foi conquistado ainda.")
-    else:
-        for category, label in ACHIEVEMENT_CATEGORIES:
-            if category not in present:
-                continue
-            lines.append(label)
-            rows.append([_button(label, f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")])
+    from html import escape
+
+    buttons = [
+        _button(label, f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[category]}")
+        for category, label in ACHIEVEMENT_CATEGORIES
+    ]
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
     # Feitos fica no Personagem (Contrato Mestre de Telas UI v1.0.0 §6).
-    rows.append([_button("↩️ Retornar", "character:root")])
-    return Screen("\n".join(lines), "achievements", _keyboard(rows))
+    rows.append([_button(CODEX_BACK, "character:root")])
+    return _achievement_screen(
+        f"<b>{escape(ACHIEVEMENTS_TITLE)}</b>", f"<i>{escape(ACHIEVEMENTS_TEXT)}</i>", rows=rows
+    )
 
 
-def render_achievement_category(view: KnowledgeView, category: str) -> Screen:
-    label = dict(ACHIEVEMENT_CATEGORIES).get(category)
-    if label is None:
+def render_achievement_category(view: KnowledgeView, category: str, page: int = 0) -> Screen:
+    from html import escape
+
+    if category not in dict(ACHIEVEMENT_CATEGORIES):
         return render_achievement_root(view)
+    emoji, name = _category_parts(category)
     entries = [entry for entry in view.achievements if entry.category == category]
-    if not entries:
+    pages = max(1, -(-len(entries) // ACHIEVEMENTS_PER_PAGE))
+    page = min(max(page, 0), pages - 1)
+    shown = entries[page * ACHIEVEMENTS_PER_PAGE : (page + 1) * ACHIEVEMENTS_PER_PAGE]
+    listing = []
+    rows = []
+    for entry in shown:
+        state = "Concluído" + (f" · {entry.origin}" if entry.origin else "")
+        listing.append(
+            f"{_achievement_emoji(entry)} <b>{escape(entry.name)}</b>\n"
+            f"🏆 <code>{escape(state)}</code>"
+        )
+        rows.append(
+            [
+                _button(
+                    f"{_achievement_emoji(entry)} {entry.name}",
+                    f"kb:ae:{_base36(ACHIEVEMENT_INDEX[entry.achievement_id])}",
+                )
+            ]
+        )
+    navigation = []
+    key = ACHIEVEMENT_CATEGORY_KEYS[category]
+    if page > 0:
+        navigation.append(_button("◀️ Anterior", f"kb:ac:{key}:{page - 1}"))
+    if page < pages - 1:
+        navigation.append(_button("▶️ Próxima", f"kb:ac:{key}:{page + 1}"))
+    if navigation:
+        rows.append(navigation)
+    rows.append([_button(CODEX_BACK, "kb:a")])
+    description = ACHIEVEMENT_CATEGORY_DESCRIPTIONS.get(category)
+    return _achievement_screen(
+        f"🏆 <b>Feitos de {escape(name)}</b>",
+        f"<i>{escape(description)}</i>" if description else None,
+        "\n\n".join(listing) if listing else f"<i>{escape(ACHIEVEMENTS_EMPTY)}</i>",
+        rows=rows,
+    )
+
+
+def render_achievement_detail(view: KnowledgeView, achievement_id: str) -> Screen:
+    """Detalhe do Feito: nome, narrativa, Raridade e Origem; Feitos não têm Usar (§8)."""
+    from html import escape
+
+    entry = next(
+        (item for item in view.achievements if item.achievement_id == achievement_id), None
+    )
+    if entry is None:
         return render_achievement_root(view)
-    lines = ["🏆 Feitos", "", label, ""]
-    for entry in entries:
-        lines.append(f"✅ {entry.name}")
-        lines.append(entry.description)
-        if entry.reward:
-            lines.append(f"🎁 {entry.reward}")
-        lines.append("")
-    lines.pop()
-    rows = [[_button("↩️ Retornar", "kb:a")]]
-    return Screen("\n".join(lines), "achievements", _keyboard(rows))
+    fields = []
+    if entry.rarity:
+        fields.append(f"✨ <b>Raridade</b> · <code>{escape(entry.rarity)}</code>")
+    if entry.origin:
+        fields.append(f"🌐 <b>Origem</b> · <code>{escape(entry.origin)}</code>")
+    category_entries = [item for item in view.achievements if item.category == entry.category]
+    page = category_entries.index(entry) // ACHIEVEMENTS_PER_PAGE
+    back = f"kb:ac:{ACHIEVEMENT_CATEGORY_KEYS[entry.category]}"
+    return _achievement_screen(
+        f"🏆 <b>{escape(entry.name)}</b>",
+        f"<i>{escape(entry.description)}</i>",
+        "\n".join(fields) if fields else None,
+        rows=[[_button(CODEX_BACK, f"{back}:{page}" if page else back)]],
+    )
 
 
 def _known_codex_categories(view: KnowledgeView) -> set[str]:

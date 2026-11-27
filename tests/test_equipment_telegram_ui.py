@@ -106,7 +106,7 @@ def test_character_hub_follows_master_contract():
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
         ["⚔️ Equipamentos", "🎒 Inventário"],
         ["✨ Artes", "🌿 Talentos"],
-        ["🧩 Doutrinas", "🪪 Perfil"],
+        ["🧩 Doutrinas", "📖 História"],
         ["🎨 Cosméticos", "🏆 Feitos"],
         ["🏛️ Legado"],
         ["↩️ Retornar"],
@@ -168,29 +168,30 @@ def test_main_menu_personagem_button_has_real_character_destination():
 
 def test_equipment_root_always_renders_eight_slots_and_stable_numeric_callbacks():
     screen = render_equipment_root(_root(version=2147483647))
+    # Especificação consolidada 2026-11-26, Parte I §1.
+    assert screen.text.startswith(
+        "<b>🛡️ Equipamentos</b>\n\n<i>Os equipamentos usados pelo personagem ocupam "
+        "posições específicas e podem ser substituídos conforme a jornada avança.</i>"
+    )
     expected = [
-        "🗡️ Arma Principal · Vazio",
-        "⚔️ Arma Secundária · Vazio",
-        "🪖 Cabeça · Vazio",
-        "🥋 Torso · Vazio",
-        "🧤 Mãos · Vazio",
-        "🥾 Pés · Vazio",
-        "💍 Acessório · Vazio",
-        "🧿 Artefato · Vazio",
+        "⚔️ <b>Principal</b> · <code>Vazio</code>",
+        "⚔️ <b>Secundária</b> · <code>Vazio</code>",
+        "🪖 <b>Cabeça</b> · <code>Vazio</code>",
+        "🥋 <b>Torso</b> · <code>Vazio</code>",
+        "🧤 <b>Mãos</b> · <code>Vazio</code>",
+        "🥾 <b>Pés</b> · <code>Vazio</code>",
+        "💍 <b>Acessório</b> · <code>Vazio</code>",
+        "🔮 <b>Artefato</b> · <code>Vazio</code>",
     ]
     assert all(line in screen.text for line in expected)
-    buttons = _buttons(screen)
-    assert [button.text for button in buttons] == [
-        "Arma Principal",
-        "Arma Secundária",
-        "Cabeça",
-        "Torso",
-        "Mãos",
-        "Pés",
-        "Acessório",
-        "Artefato",
-        "← Personagem",
+    assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
+        ["⚔️ Principal", "⚔️ Secundária"],
+        ["🪖 Cabeça", "🥋 Torso"],
+        ["🧤 Mãos", "🥾 Pés"],
+        ["💍 Acessório", "🔮 Artefato"],
+        ["↩️ Retornar"],
     ]
+    buttons = _buttons(screen)
     assert [button.callback_data for button in buttons[:8]] == [
         "eq:s:p:2147483647",
         "eq:s:s:2147483647",
@@ -214,20 +215,19 @@ def test_equipment_root_shows_partial_equipment_and_blocks_secondary_for_two_han
         equipped_slot=EquipmentSlot.PRINCIPAL,
     )
     screen = render_equipment_root(_root({EquipmentSlot.PRINCIPAL: weapon}, blocked_secondary=True))
-    assert "🗡️ Arma Principal · Lâmina &lt;da Ruptura&gt; · +6" in screen.text
-    assert "⚔️ Arma Secundária · Bloqueada" in screen.text
-    assert "🔒 Arma de 2 mãos equipada" in screen.text
-    assert "🪖 Cabeça · Vazio" in screen.text
+    assert "⚔️ <b>Principal</b> · <code>Lâmina &lt;da Ruptura&gt; +6</code>" in screen.text
+    assert "⚔️ <b>Secundária</b> · <code>Bloqueada</code>" in screen.text
+    assert "🪖 <b>Cabeça</b> · <code>Vazio</code>" in screen.text
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "Arma Principal",
-        "Cabeça",
-        "Torso",
-        "Mãos",
-        "Pés",
-        "Acessório",
-        "Artefato",
-        "← Personagem",
+        "⚔️ Principal",
+        "🪖 Cabeça",
+        "🥋 Torso",
+        "🧤 Mãos",
+        "🥾 Pés",
+        "💍 Acessório",
+        "🔮 Artefato",
+        "↩️ Retornar",
     ]
     assert all(button.callback_data != "eq:s:s:4" for button in buttons)
     assert "ATQ" not in screen.text
@@ -263,37 +263,38 @@ def test_equipment_detail_localizes_rarity_and_displays_actual_contribution(rari
     )
     view = EquipmentDetailView(uuid4(), 60, 2_147_483_647, item)
     screen = render_equipment_detail(view, context="i")
-    assert "🪖 Elmo &lt;Cinério&gt; · +10" in screen.text
-    assert f"{icon} {rarity} · Cabeça" in screen.text
-    assert "🔗 Vinculado" in screen.text
-    assert "📈 Nível do Item · 60" in screen.text
-    assert "❤️ HP +12" in screen.text
-    assert "⚔️ ATQ +3.5" in screen.text
-    assert "💨 AGI +1.75" in screen.text
-    assert "🗡️ PER +0.25%" in screen.text
-    assert "💥 CRIT +1.5%" in screen.text
-    assert "🛡️ Bloqueio +2%" in screen.text
+    assert "🪖 <b>Elmo &lt;Cinério&gt; +10</b>" in screen.text
+    assert f"{icon} <b>Raridade</b> · <code>{rarity}</code>" in screen.text
+    assert "✨ <b>Grau</b> · <code>VI</code>" in screen.text
+    assert "🔗 <b>Vínculo</b> · <code>Vinculado</code>" in screen.text
+    # Parte I §2: sem Posição, Forma, Nível do Item nem Compatibilidade de Artes.
+    assert "Nível do Item" not in screen.text and "Cabeça" not in screen.text
+    assert "❤️ <b>HP</b> · <code>+12</code>" in screen.text
+    assert "⚔️ <b>ATQ</b> · <code>+3.5</code>" in screen.text
+    assert "💨 <b>AGI</b> · <code>+1.75</code>" in screen.text
+    assert "🗡️ <b>PER</b> · <code>+0.25%</code>" in screen.text
+    assert "💥 <b>CRIT</b> · <code>+1.5%</code>" in screen.text
+    assert "🛡️ <b>Bloqueio</b> · <code>+2%</code>" in screen.text
     assert "DEF" not in screen.text and "Esquiva" not in screen.text
     assert all(len(button.callback_data.encode()) <= 64 for button in _buttons(screen))
-    assert "Aprimorar" not in [button.text for button in _buttons(screen)]
-    assert "Runas" in [button.text for button in _buttons(screen)]
-    assert "Encantamento" in [button.text for button in _buttons(screen)]
+    assert "🔨 Aprimorar" not in [button.text for button in _buttons(screen)]
+    assert "🔮 Runas" in [button.text for button in _buttons(screen)]
+    assert "✨ Encantamento" in [button.text for button in _buttons(screen)]
 
 
 def test_equipment_detail_requires_level_without_equip_action_and_inventory_return():
     item = _item(level=25, eligible=False)
     screen = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, item), context="i")
-    assert "📈 Nível do Item · 25" in screen.text
-    assert "⏳ Requer Nv. 25" in screen.text
+    assert "Nível do Item" not in screen.text
     buttons = _buttons(screen)
     assert [button.text for button in buttons] == [
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+        "🔮 Runas",
+        "✨ Encantamento",
+        "🔨 Aprimorar",
+        "🔧 Desmontar",
+        "🚫 Bloquear",
+        "⭐ Favoritar",
+        "↩️ Retornar",
     ]
     assert buttons[-1].callback_data == "inventory:category:equipment"
     assert "[Trocar]" not in screen.text
@@ -314,30 +315,25 @@ def test_equipped_detail_and_inventory_context_never_offers_swap():
     item = _item(equipped_slot=EquipmentSlot.CABECA)
     view = EquipmentDetailView(uuid4(), 20, 15, item)
     slot_detail = render_equipment_detail(view, context="s")
-    assert [button.text for button in _buttons(slot_detail)] == [
-        "Trocar",
-        "Desequipar",
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+    assert [[b.text for b in row] for row in slot_detail.keyboard.inline_keyboard] == [
+        ["🔄 Trocar", "❌ Desequipar"],
+        ["🔮 Runas", "✨ Encantamento"],
+        ["🔨 Aprimorar", "🔧 Desmontar"],
+        ["🚫 Bloquear", "⭐ Favoritar"],
+        ["↩️ Retornar"],
     ]
     inventory_detail = render_equipment_detail(view, context="i")
     assert [button.text for button in _buttons(inventory_detail)] == [
-        "Desequipar",
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+        "❌ Desequipar",
+        "🔮 Runas",
+        "✨ Encantamento",
+        "🔨 Aprimorar",
+        "🔧 Desmontar",
+        "🚫 Bloquear",
+        "⭐ Favoritar",
+        "↩️ Retornar",
     ]
-    assert "✅ Equipado" in inventory_detail.text
-    assert "Trocar" not in [button.text for button in _buttons(inventory_detail)]
+    assert "🔄 Trocar" not in [button.text for button in _buttons(inventory_detail)]
 
 
 def test_candidate_selection_uses_stable_item_identity_and_no_lore():
@@ -357,7 +353,7 @@ def test_candidate_selection_uses_stable_item_identity_and_no_lore():
     assert "Capacete de Cinzas · +2" in screen.text
     assert "⚪ Comum · Cabeça" in screen.text
     assert "📈 Nível do Item · 4" in screen.text
-    assert "❤️ HP +3.25" in screen.text
+    assert "❤️ <b>HP</b> · <code>+3.25</code>" in screen.text
     assert "LOR E NÃO DEVE SER LISTADO" not in screen.text
     buttons = _buttons(screen)
     assert buttons[0].text == "Capacete de Cinzas +2"
@@ -433,7 +429,7 @@ async def test_stale_slot_read_replies_and_rebuilds_authoritative_equipment_root
     answer = next(method for method in methods if isinstance(method, AnswerCallbackQuery))
     screen = next(method for method in reversed(methods) if isinstance(method, EditMessageText))
     assert answer.text == "Configuração atualizada."
-    assert "🪖 Cabeça · Elmo de Teste · +0" in screen.text
+    assert "🪖 <b>Cabeça</b> · <code>Elmo de Teste</code>" in screen.text
     assert equipment_service.equip_item.await_count == 0
     assert equipment_service.unequip_slot.await_count == 0
 
@@ -445,12 +441,13 @@ def test_detail_and_candidates_show_armor_class_and_region():
         _item(name="Elmo Pesado"), armor_class_label="Pesada", region_label="Confins do Véu"
     )
     detail = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, item), context="i")
-    assert "Classe de Armadura · Pesada" in detail.text
-    assert "Região · Confins do Véu" in detail.text
+    # Detalhe (§2): a Classe de Armadura aparece como Proficiência; sem Região.
+    assert "🛡️ <b>Proficiência</b> · <code>Pesada</code>" in detail.text
+    assert "Região" not in detail.text
     candidates = render_equipment_candidates(
         EquipmentCandidatesView(uuid4(), 10, 1, EquipmentSlot.CABECA, (item,))
     )
     assert "Classe de Armadura · Pesada" in candidates.text
     assert "Região · Confins do Véu" in candidates.text
     plain = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 9, _item()), context="i")
-    assert "Classe de Armadura" not in plain.text and "Região" not in plain.text
+    assert "Proficiência" not in plain.text and "Região" not in plain.text

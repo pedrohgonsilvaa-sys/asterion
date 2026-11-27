@@ -161,21 +161,21 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
     assert detail_callback == f"eq:v:{item_id.hex}"
 
     screen = await _click(dispatcher, telegram, detail_callback, actor=actor, update_id=9104)
-    assert "🔵 Raro · Cabeça" in screen.text
-    assert "🔗 Vinculado" in screen.text
-    assert "📈 Nível do Item · 1" in screen.text
-    assert "❤️ HP +12.24" in screen.text
-    assert "🗡️ PER +0.255%" in screen.text
+    assert "🔵 <b>Raridade</b> · <code>Raro</code>" in screen.text
+    assert "🔗 <b>Vínculo</b> · <code>Vinculado</code>" in screen.text
+    assert "Nível do Item" not in screen.text
+    assert "❤️ <b>HP</b> · <code>+12.24</code>" in screen.text
+    assert "🗡️ <b>PER</b> · <code>+0.255%</code>" in screen.text
     assert [button.text for button in _buttons(screen)] == [
-        "Equipar",
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Reroll",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+        "✅ Equipar",
+        "🔮 Runas",
+        "✨ Encantamento",
+        "🔨 Aprimorar",
+        "🔧 Desmontar",
+        "🚫 Bloquear",
+        "⭐ Favoritar",
+        "🎲 Reroll",
+        "↩️ Retornar",
     ]
     equip_callback = _buttons(screen)[0].callback_data
     assert len(equip_callback.encode()) <= 64
@@ -183,18 +183,17 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
     character_before, _ = await _equipped_state(database, actor)
     hp_before = character_before.max_hp
     screen = await _click(dispatcher, telegram, equip_callback, actor=actor, update_id=9105)
-    assert "✅ Equipado" in screen.text
-    assert "Equipar" not in [button.text for button in _buttons(screen)]
+    assert "✅ Equipar" not in [button.text for button in _buttons(screen)]
     assert [button.text for button in _buttons(screen)] == [
-        "Desequipar",
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Reroll",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+        "❌ Desequipar",
+        "🔮 Runas",
+        "✨ Encantamento",
+        "🔨 Aprimorar",
+        "🔧 Desmontar",
+        "🚫 Bloquear",
+        "⭐ Favoritar",
+        "🎲 Reroll",
+        "↩️ Retornar",
     ]
     character_after, equipped = await _equipped_state(database, actor)
     assert equipped == {EquipmentSlot.CABECA.value: item_id}
@@ -203,7 +202,7 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
 
     # A callback replay retains its old version and cannot change HP/version twice.
     screen = await _click(dispatcher, telegram, equip_callback, actor=actor, update_id=9106)
-    assert "✅ Equipado" in screen.text
+    assert "❌ Desequipar" in [button.text for button in _buttons(screen)]
     assert character_after.combat_configuration_version == 1
     assert _last_callback_answer(telegram).text == "Configuração atualizada."
     character_replayed, replayed_slots = await _equipped_state(database, actor)
@@ -216,17 +215,17 @@ async def test_telegram_inventory_equip_unequip_and_duplicate_callback_are_persi
     assert unequip_callback == "eq:u:h:1:i"
     screen = await _click(dispatcher, telegram, unequip_callback, actor=actor, update_id=9107)
     assert "Elmo de Cinzas" in screen.text
-    assert "✅ Equipado" not in screen.text
+    assert "❌ Desequipar" not in [button.text for button in _buttons(screen)]
     assert [button.text for button in _buttons(screen)] == [
-        "Equipar",
-        "Runas",
-        "Encantamento",
-        "Aprimorar",
-        "Reroll",
-        "Favoritar",
-        "Bloquear",
-        "Desmontar",
-        "← Equipamentos",
+        "✅ Equipar",
+        "🔮 Runas",
+        "✨ Encantamento",
+        "🔨 Aprimorar",
+        "🔧 Desmontar",
+        "🚫 Bloquear",
+        "⭐ Favoritar",
+        "🎲 Reroll",
+        "↩️ Retornar",
     ]
     character_final, final_slots = await _equipped_state(database, actor)
     assert final_slots == {}
@@ -270,10 +269,10 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
     dispatcher, telegram = _dispatcher(database), _telegram()
 
     screen = await _click(dispatcher, telegram, "eq:r", actor=actor, update_id=9201)
-    assert "🪖 Cabeça · Elmo Antigo · +0" in screen.text
+    assert "🪖 <b>Cabeça</b> · <code>Elmo Antigo</code>" in screen.text
     screen = await _click(dispatcher, telegram, "eq:s:h:2", actor=actor, update_id=9202)
     assert "Elmo Antigo" in screen.text
-    assert [button.text for button in _buttons(screen)][:2] == ["Trocar", "Desequipar"]
+    assert [button.text for button in _buttons(screen)][:2] == ["🔄 Trocar", "❌ Desequipar"]
     screen = await _click(dispatcher, telegram, "eq:c:h:2", actor=actor, update_id=9203)
     assert "Elmo Novo" in screen.text
     assert "Elmo Antigo" not in screen.text
@@ -285,7 +284,7 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
         actor=actor,
         update_id=9204,
     )
-    assert "🪖 Cabeça · Elmo Novo · +0" in screen.text
+    assert "🪖 <b>Cabeça</b> · <code>Elmo Novo</code>" in screen.text
     character, equipped = await _equipped_state(database, actor)
     assert equipped[EquipmentSlot.CABECA.value] == second_head
     assert character.combat_configuration_version == 3
@@ -306,8 +305,8 @@ async def test_telegram_slot_swap_and_two_handed_equipment_use_authoritative_ser
         actor=actor,
         update_id=9206,
     )
-    assert "🗡️ Arma Principal · Lança Longa · +0" in screen.text
-    assert "⚔️ Arma Secundária · Bloqueada" in screen.text
+    assert "⚔️ <b>Principal</b> · <code>Lança Longa</code>" in screen.text
+    assert "⚔️ <b>Secundária</b> · <code>Bloqueada</code>" in screen.text
     character, equipped = await _equipped_state(database, actor)
     assert equipped == {
         EquipmentSlot.CABECA.value: second_head,
@@ -367,7 +366,7 @@ async def test_telegram_equipment_callback_rejects_foreign_item_and_locked_mutat
         update_id=9302,
     )
     assert "Peitoral de Cinzas" in screen.text
-    assert "Equipar" in [button.text for button in _buttons(screen)]
+    assert "✅ Equipar" in [button.text for button in _buttons(screen)]
     assert _last_callback_answer(telegram).text == (
         "Equipamentos não podem ser alterados durante esta atividade."
     )

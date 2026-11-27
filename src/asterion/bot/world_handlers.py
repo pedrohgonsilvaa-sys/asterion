@@ -125,7 +125,7 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.flavor_ui import with_region_flavor
-from asterion.bot.inventory_ui import render_inventory
+from asterion.bot.inventory_ui import material_source, render_inventory, render_material_detail
 from asterion.bot.map_ui import TDO_LOCAL_BY_KEY as TDO_MAP_LOCALS
 from asterion.bot.map_ui import render_map as render_map_screen
 from asterion.bot.map_ui import render_tdo_local as render_tdo_map_local
@@ -1692,6 +1692,26 @@ def world_router(
         view = await inventory.consumable_detail(query.from_user.id, item_id)
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("inventory:material:"))
+    async def inventory_material(query: CallbackQuery):
+        """Detalhe do Material (especificação consolidada 2026-11-26, Parte I §6)."""
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        parts = (query.data or "").split(":")
+        source = parts[2] if len(parts) > 2 else ""
+        page = int(parts[3]) if len(parts) > 3 and parts[3].isdecimal() else 0
+        view = await inventory.category(query.from_user.id, "materials")
+        if view is None:
+            return
+        entry = next((item for item in view.entries if material_source(item) == source), None)
+        screen = (
+            render_material_detail(entry, page)
+            if entry is not None
+            else render_inventory(view, page)
+        )
+        await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data == "warehouse:root")
     @router.callback_query(F.data == "warehouse:root:refuge")

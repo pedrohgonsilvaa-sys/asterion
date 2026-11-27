@@ -18,7 +18,7 @@ from asterion.application.equipment import equipment_instance_payload
 from asterion.application.prologue import CombatView
 from asterion.bot.character_progression_ui import render_art_detail
 from asterion.bot.combat_ui import CombatCallback, event_line, render_combat
-from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
+from asterion.bot.doctrines_ui import doctrine_art_ids
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
     ACTIVE_ART_IDS_BY_CLASS,
@@ -46,6 +46,7 @@ from asterion.infrastructure.db.models import (
     CharacterEquipmentSlot,
     EquipmentItem,
 )
+from tests.ui_plain import art_choices_text, plain
 
 D = Decimal
 FIRMEZA = SENTINEL_ART_IDS["firmeza"]
@@ -204,14 +205,15 @@ async def test_firmeza_is_equipable_without_melee_metadata_and_survives_reconnec
     assert reconnected is not None
     assert [(entry.slot, entry.art_id) for entry in reconnected.slots] == [(2, FIRMEZA)]
     detail = render_art_detail(reconnected, FIRMEZA)
-    assert "+12% DEF" in detail.text
-    assert "2T" in detail.text and "Recarga · 3" in detail.text
-    assert "Requisito de arma" not in detail.text
+    assert "+12% DEF" in plain(detail.text)
+    assert "2T" in plain(detail.text) and "Recarga · 3" in plain(detail.text)
+    assert "Requisito de arma" not in plain(detail.text)
+    # Equipada: o detalhe oferece Desequipar além das três posições (§8).
     assert any(
-        button.text == "Equipar Arte"
+        button.text == "❌ Desequipar"
         for row in detail.keyboard.inline_keyboard
         for button in row
-    ) is False
+    )
 
     with pytest.raises(ActiveArtMutationRejected) as stale:
         await service.equip_art(actor, 1, FIRMEZA, expected_configuration_version=0)
@@ -319,12 +321,8 @@ def test_firmeza_is_available_in_doctrine_at_level_18_without_path_gate():
         can_apply=True,
     )
     assert FIRMEZA in doctrine_art_ids(collection, doctrine)
-    screen = render_art_choices(collection, doctrine, 1)
-    assert any(
-        "Firmeza" in button.text
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    )
+    screen_text = art_choices_text(collection, doctrine, 1)
+    assert "Firmeza" in screen_text
     assert FIRMEZA not in doctrine_art_ids(replace(collection, level=17), doctrine)
 
 

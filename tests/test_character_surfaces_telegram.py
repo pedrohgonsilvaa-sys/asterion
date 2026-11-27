@@ -181,7 +181,8 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
     )
     screen = _last_screen(bot)
     labels = [b.text for row in screen.reply_markup.inline_keyboard for b in row]
-    assert "🪪 Perfil" in labels and "❤️ <b>HP</b>" in screen.text
+    assert "📖 História" in labels and "🪪 Perfil" not in labels
+    assert "❤️ <b>HP</b>" in screen.text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot,
@@ -198,35 +199,48 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         bot, callback_update("character:profile", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "📇 Perfil" in screen.text
-    assert "Guilda" not in screen.text and "Elo" not in screen.text and "Título" not in screen.text
+    # Parte IV §1 e §8: não existe mais tela Perfil; História é a tela acessível.
+    assert "📖 <b>História</b>" in screen.text or "<b>📖 História</b>" in screen.text
+    assert "Perfil" not in screen.text
+    assert [b.text for row in screen.reply_markup.inline_keyboard for b in row] == [
+        "✍️ Escrever",
+        "↩️ Retornar",
+    ]
+    requests_before = len(bot.session.make_request.call_args_list)
     update_id += 1
     await dispatcher.feed_raw_update(
-        bot, callback_update("profile:edit:0", actor=actor, update_id=update_id)
+        bot, callback_update(_button(screen, "✍️ Escrever").callback_data, actor=actor,
+                             update_id=update_id)
     )
-    prompt = next(
-        call.args[1]
-        for call in reversed(bot.session.make_request.call_args_list)
-        if isinstance(call.args[1], SendMessage)
-    )
-    prompt_message_id = max(900, next(response_ids) - 1)
-    assert "Escreva a História" in (prompt.reply_markup.input_field_placeholder or "")
+    new_calls = bot.session.make_request.call_args_list[requests_before:]
+    # A própria mensagem entra no estado de entrada: nada de mensagem nova pedindo resposta.
+    assert not any(isinstance(call.args[1], SendMessage) for call in new_calls)
+    screen = _last_screen(bot)
+    assert isinstance(screen, EditMessageText)
+    assert "✍️ Envie a História do personagem." in screen.text
+
     update_id += 1
-    reply = {
-        "message_id": prompt_message_id,
-        "date": 1,
-        "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
-        "chat": {"id": actor, "type": "private"},
-        "text": prompt.text,
-    }
     await dispatcher.feed_raw_update(
-        bot,
-        _message_update(
-            "Uma história <cinzenta> & livre", actor=actor, update_id=update_id, reply_to=reply
-        ),
+        bot, _message_update("x" * 601, actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
+    assert "até 600 caracteres" in screen.text
+    assert "✍️ Envie a História do personagem." in screen.text
+
+    update_id += 1
+    await dispatcher.feed_raw_update(
+        bot,
+        _message_update("Uma história <cinzenta> & livre", actor=actor, update_id=update_id),
+    )
+    screen = _last_screen(bot)
+    assert isinstance(screen, EditMessageText)
     assert "Uma história &lt;cinzenta&gt; &amp; livre" in screen.text
+    assert "✍️ Envie a História" not in screen.text
+    # A resposta do jogador é apagada: nenhum prompt antigo fica no chat.
+    assert any(
+        type(call.args[1]).__name__ == "DeleteMessage"
+        for call in bot.session.make_request.call_args_list
+    )
     async with sessions() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         from asterion.infrastructure.db.models import CharacterProfile

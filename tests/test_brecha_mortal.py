@@ -20,7 +20,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.round import RoundService
 from asterion.bot.character_progression_ui import render_art_detail
 from asterion.bot.combat_ui import CombatCallback, event_line, render_combat
-from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
+from asterion.bot.doctrines_ui import doctrine_art_ids
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
     ACTIVE_ART_IDS_BY_CLASS,
@@ -53,6 +53,7 @@ from asterion.infrastructure.db.models import (
     EquipmentItem,
     GameActivity,
 )
+from tests.ui_plain import art_choices_text, plain
 
 D = Decimal
 ZERO = Decimal(0)
@@ -355,12 +356,8 @@ def test_brecha_mortal_weapon_tags_and_doutrina_choices_are_explicit():
         can_apply=True,
     )
     assert BRECHA_ID in doctrine_art_ids(view, doctrine)
-    choices = render_art_choices(view, doctrine, 1)
-    assert any(
-        "Brecha Mortal" in button.text
-        for row in choices.keyboard.inline_keyboard
-        for button in row
-    )
+    choices_text = art_choices_text(view, doctrine, 1)
+    assert "Brecha Mortal" in choices_text
 
 
 def test_brecha_mortal_loses_opportunism_after_shared_purification_removal():
@@ -602,10 +599,10 @@ def test_brecha_mortal_detail_combat_hud_and_round_keep_equipped_action_context(
         foreground=False,
     )
     detail = render_art_detail(view, BRECHA_ID)
-    assert "Desbloqueio · Nv.34" in detail.text
-    assert "130% ATQ" in detail.text
-    assert "+10 p.p. PER" in detail.text
-    assert "Arma corpo a corpo compatível" in detail.text
+    assert "Desbloqueio · Nv. 34" in plain(detail.text)
+    assert "130% ATQ" in plain(detail.text)
+    assert "+10 p.p. PER" in plain(detail.text)
+    assert "Arma corpo a corpo compatível" not in plain(detail.text)
 
     screen = render_combat(
         CombatView(uuid4(), uuid4(), uuid4(), state, "test", 0, context="road")

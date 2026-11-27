@@ -19,7 +19,6 @@ from asterion.application.talents import (
     TalentService,
 )
 from asterion.bot.character_progression_ui import render_talent_detail, render_talent_list
-from asterion.bot.doctrines_ui import render_talent_choices
 from asterion.domain.arts import (
     ERRANTE_ART_IDS,
     LUMINAR_ART_IDS,
@@ -49,6 +48,7 @@ from asterion.infrastructure.db.models import (
     CharacterTalentChoice,
     WorldState,
 )
+from tests.ui_plain import doctrine_talent_choices
 
 D = Decimal
 CLASS_ORDER = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -382,13 +382,9 @@ async def test_doctrine_rejects_nv55_below_required_level(database):
     doctrine = next(
         item for item in collection.doctrines if item.doctrine_id == created.doctrine_id
     )
-    available = render_talent_choices(collection, doctrine, 7)
+    available = doctrine_talent_choices(collection, doctrine)
     assert all(
-        any(
-            definition.name in button.text
-            for row in available.keyboard.inline_keyboard
-            for button in row
-        )
+        definition.name in available
         for definition in TALENTS_BY_CLASS[character_class]
         if definition.level == 35
     )

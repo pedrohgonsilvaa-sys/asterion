@@ -42,6 +42,8 @@ class CosmeticCategoryView:
 class CosmeticsView:
     character_name: str
     categories: tuple[CosmeticCategoryView, ...]
+    # Título inicial persistido do personagem: vale quando nenhum Título é selecionado.
+    initial_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +130,14 @@ class CosmeticService:
         The starting appearance is the logical default; "no selection" is how the
         runtime represents it. Nothing is written to ``character_cosmetics``.
         """
+        return await self.select_default(actor, "appearance", expected_selected_id)
+
+    async def select_default(
+        self, actor: int, cosmetic_type: str, expected_selected_id: str | None
+    ) -> CosmeticSelectionResult | None:
+        """Volta à Aparência inicial ou ao Título inicial persistido (sem seleção)."""
+        if cosmetic_type not in {"appearance", "title"}:
+            raise CosmeticMutationRejected("no_default")
         async with self.sessions.begin() as session:
             character = await self._character(session, actor, lock=True)
             if character is None:
@@ -137,7 +147,7 @@ class CosmeticService:
                 select(CharacterCosmeticSelection.cosmetic_id)
                 .where(
                     CharacterCosmeticSelection.character_id == character.id,
-                    CharacterCosmeticSelection.cosmetic_type == "appearance",
+                    CharacterCosmeticSelection.cosmetic_type == cosmetic_type,
                 )
                 .with_for_update()
             )
@@ -148,7 +158,7 @@ class CosmeticService:
             await session.execute(
                 delete(CharacterCosmeticSelection).where(
                     CharacterCosmeticSelection.character_id == character.id,
-                    CharacterCosmeticSelection.cosmetic_type == "appearance",
+                    CharacterCosmeticSelection.cosmetic_type == cosmetic_type,
                 )
             )
             return CosmeticSelectionResult(True, await self._view(session, character))
@@ -256,4 +266,4 @@ class CosmeticService:
                     uses_initial_appearance=cosmetic_type == "appearance" and selected is None,
                 )
             )
-        return CosmeticsView(character.name, tuple(categories))
+        return CosmeticsView(character.name, tuple(categories), character.title)

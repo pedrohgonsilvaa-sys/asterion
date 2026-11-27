@@ -37,6 +37,7 @@ from asterion.domain.prologue import PROFILE
 from asterion.domain.talents import TALENT_DEFINITIONS
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import Account, Character
+from tests.ui_plain import plain
 
 SELO = ORACULO_ART_IDS["selo_da_queda"]
 SELO_EFFECT = ORACULO_SELO_EFFECT_ID
@@ -424,13 +425,13 @@ def test_selo_detail_and_doctrine_show_class_level_and_no_weapon_gate():
         foreground=False,
     )
     screen = render_art_detail(character_view, SELO)
-    assert "Selo da Queda" in screen.text
-    assert "Nv.34" in screen.text
-    assert "100% ATQ" in screen.text
-    assert "10% DEF" in screen.text
-    assert "2T" in screen.text and "Recarga · 3 Rodadas" in screen.text
-    assert "Requisito de arma · Nenhum" in screen.text
-    assert "Presságio Ofensivo" in screen.text
+    assert "Selo da Queda" in plain(screen.text)
+    assert "Nv. 34" in plain(screen.text)
+    assert "100% ATQ" in plain(screen.text)
+    assert "10% DEF" in plain(screen.text)
+    assert "2T" in plain(screen.text) and "Recarga · 3 Rodadas" in plain(screen.text)
+    assert "Requisito de arma" not in plain(screen.text)
+    assert "Presságio Ofensivo" in plain(screen.text)
 
 
 async def _seed_oraculo(database, actor: int, *, level: int, path: str | None):

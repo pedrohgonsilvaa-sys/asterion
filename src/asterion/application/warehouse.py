@@ -31,7 +31,6 @@ from asterion.application.inventory_capacity import (
     warehouse_capacity,
     warehouse_slots,
 )
-from asterion.application.safe_location import current_permanent_brazier
 from asterion.infrastructure.db.models import (
     Character,
     CharacterEquipmentSlot,
@@ -45,6 +44,7 @@ from asterion.infrastructure.db.models import (
     WarehouseMaterialStack,
     WarehouseOperation,
     WarehouseRuneStack,
+    WorldState,
 )
 
 OPERATION_TTL = timedelta(minutes=5)
@@ -104,6 +104,18 @@ STACK_ORDER = {
     "rune": ("family", "rarity", "grade", "bound", "id"),
 }
 
+
+
+async def _warehouse_access(session: AsyncSession, character_id: UUID) -> tuple[str, str]:
+    """Armazém acessível em qualquer Local (especificação consolidada 2026-11-26 §4).
+
+    O gate de Braseiro permanente descoberto foi revogado pelo autor e não deve voltar.
+    Devolve só o Local atual, para registro; nunca bloqueia o acesso.
+    """
+    world = await session.scalar(
+        select(WorldState).where(WorldState.character_id == character_id)
+    )
+    return ("warehouse", world.location if world is not None else "")
 
 class WarehouseRejected(RuntimeError):
     def __init__(self, code: str):
@@ -172,7 +184,7 @@ class WarehouseService:
             character = await self._character(session, actor)
             if character is None:
                 return None
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             counts = await inventory_slot_counts(session, character.id)
             stored = []
             if safe is not None:
@@ -196,7 +208,7 @@ class WarehouseService:
             character = await self._character(session, actor)
             if character is None:
                 return None
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             if safe is None:
                 raise WarehouseRejected("SAFE_LOCATION_REQUIRED")
             counts = await inventory_slot_counts(session, character.id)
@@ -263,7 +275,7 @@ class WarehouseService:
             character = await self._character(session, actor)
             if character is None:
                 return None
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             if safe is None:
                 raise WarehouseRejected("SAFE_LOCATION_REQUIRED")
             _record, _snapshot, title, quantity, _source_key = await self._transfer_source(
@@ -300,7 +312,7 @@ class WarehouseService:
             character = await self._lock_character(session, actor)
             if character is None:
                 return None
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             if safe is None:
                 raise WarehouseRejected("SAFE_LOCATION_REQUIRED")
             record, snapshot, title, available, source_key = await self._transfer_source(
@@ -378,7 +390,7 @@ class WarehouseService:
             )
             session.add(operation)
             counts = await inventory_slot_counts(session, character.id)
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             return WarehouseView(
                 kind="warehouse_operation",
                 character_id=character.id,
@@ -444,7 +456,7 @@ class WarehouseService:
                     "EXPIRED", operation.direction, operation.kind,
                     operation.quantity, operation.id
                 )
-            safe = await current_permanent_brazier(session, character.id)
+            safe = await _warehouse_access(session, character.id)
             if operation.direction in {"deposit", "withdraw"} and safe is None:
                 operation.status = "stale"
                 operation.completed_at = now

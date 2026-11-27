@@ -18,7 +18,6 @@ from asterion.application.talents import (
     TalentService,
 )
 from asterion.bot.character_progression_ui import render_talent_detail
-from asterion.bot.doctrines_ui import render_talent_choices
 from asterion.domain.arts import (
     ERRANTE_ART_IDS,
     LUMINAR_ART_IDS,
@@ -55,6 +54,7 @@ from asterion.infrastructure.db.models import (
     CharacterTalentChoice,
     WorldState,
 )
+from tests.ui_plain import doctrine_talent_choices
 
 D = Decimal
 CLASS_ORDER = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -696,23 +696,17 @@ async def test_doctrine_accepts_nv25_without_free_respec_and_rejects_invalid_sta
         item for item in collection.doctrines if item.doctrine_id == created.doctrine_id
     )
     tier25_definitions = tuple(t for t in TALENTS_BY_CLASS["sentinela"] if t.level == 25)
-    screen = render_talent_choices(collection, doctrine, 1)
+    screen = doctrine_talent_choices(collection, doctrine)
     assert all(
-        any(
-            definition.name in button.text
-            for row in screen.keyboard.inline_keyboard
-            for button in row
-        )
+        definition.name in screen
         for definition in tier25_definitions
     )
     future_names = {
         talent.name for talent in TALENTS_BY_CLASS["sentinela"] if talent.level >= 45
     }
     assert not any(
-        name in button.text
+        name in screen
         for name in future_names
-        for row in screen.keyboard.inline_keyboard
-        for button in row
     )
 
     invalid_ids = (

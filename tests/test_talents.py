@@ -63,6 +63,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     WorldState,
 )
+from tests.ui_plain import plain
 
 D = Decimal
 ONE = D(1)
@@ -314,15 +315,15 @@ def test_talent_and_art_screens_render_every_class_catalog_without_future_execut
         art_detail = render_art_detail(art_view, art_ids[0])
         assert "Arte Ativa" in art_detail.text
         if character_class == "vigia":
-            assert "Dano · 40% ATQ" in render_art_detail(art_view, art_ids[2]).text
-            assert "Atinge · 3 vezes" in render_art_detail(art_view, art_ids[2]).text
+            assert "Dano · 40% ATQ" in plain(render_art_detail(art_view, art_ids[2]).text)
+            assert "Atinge · 3 vezes" in plain(render_art_detail(art_view, art_ids[2]).text)
         if character_class == "luminar":
             detail = render_art_detail(art_view, art_ids[1])
-            assert "Cura · 85% ATQ" in detail.text
-            assert "Alvo · Você ou Aliado" in detail.text
+            assert "Cura · 85% ATQ" in plain(detail.text)
+            assert "Alvo · Você ou Aliado" in plain(detail.text)
         if character_class == "oraculo":
             detail = render_art_detail(art_view, art_ids[1])
-            assert "Alvo · Você ou Aliado" in detail.text
+            assert "Alvo · Você ou Aliado" in plain(detail.text)
 
 
 def test_devastador_ariete_is_visible_with_explicit_melee_requirement():
@@ -344,19 +345,18 @@ def test_devastador_ariete_is_visible_with_explicit_melee_requirement():
     detail = render_art_detail(view, ariete)
     assert "135% ATQ" in detail.text
     assert "+10 p.p." in detail.text
-    assert "Recarga · 2 Rodadas" in detail.text
-    assert "Arma corpo a corpo compatível" in detail.text
-    assert "Equipar Arte" in [
-        button.text for row in detail.keyboard.inline_keyboard for button in row
-    ]
+    assert "Recarga · 2 Rodadas" in plain(detail.text)
+    # Parte I §8: sem campo separado de Requisito de Arma; a compatibilidade continua
+    # como regra mecânica, verificada ao equipar.
+    assert "Arma corpo a corpo compatível" not in detail.text
+    slots = ["1️⃣ Equipar Arte [Slot 1]", "2️⃣ Equipar Arte [Slot 2]", "3️⃣ Equipar Arte [Slot 3]"]
+    labels = [button.text for row in detail.keyboard.inline_keyboard for button in row]
+    assert labels == [*slots, "↩️ Retornar"]
 
     incompatible = render_art_detail(
         replace(view, weapon_incompatible_art_ids=(ariete,)), ariete
     )
-    assert "equipe uma arma compatível" in incompatible.text
-    assert "Equipar Arte" not in [
-        button.text for row in incompatible.keyboard.inline_keyboard for button in row
-    ]
+    assert "Requisito" not in incompatible.text
 
 
 @pytest.mark.asyncio

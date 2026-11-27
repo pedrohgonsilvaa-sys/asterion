@@ -27,7 +27,7 @@ HELP_TOPICS = (
      "A exploração revela informações e locais conforme as escolhas disponíveis. "
      "Descobertas podem aparecer no Mapa e no Códice."),
     ("character", "👤", "Personagem",
-     "Atributos mostram os valores atuais. Perfil guarda uma História opcional."),
+     "Atributos mostram os valores atuais. História guarda um relato opcional."),
     ("equipment", "🛡️", "Equipamentos",
      "Inventário e Equipamentos mostram itens adquiridos. Aprimoramentos alteram a "
      "configuração conforme as regras do jogo."),

@@ -1,10 +1,14 @@
-"""Telegram routes for saved, reference-based combat configurations."""
+"""Rotas de Doutrinas (especificação consolidada 2026-11-26, Parte II).
+
+Selecionar uma Doutrina abre direto a Configuração; Editar abre direto cada parte.
+O nome é digitado na própria tela (``text_prompt``): a resposta do jogador é apagada
+e a mesma mensagem é editada, sem prompts antigos no chat.
+"""
 
 from uuid import UUID
 
 from aiogram import F, Router
-from aiogram.dispatcher.event.bases import SkipHandler
-from aiogram.types import CallbackQuery, ForceReply, Message
+from aiogram.types import CallbackQuery, Message
 
 from asterion.application.doctrines import (
     MAX_DOCTRINE_NAME_CHARACTERS,
@@ -13,27 +17,47 @@ from asterion.application.doctrines import (
 )
 from asterion.bot.creation_handlers import present
 from asterion.bot.doctrines_ui import (
+    EQUIPMENT_SLOT_LABELS,
+    REASON_LABELS,
+    TALENT_LEVELS,
+    TALENT_LEVELS_PER_PAGE,
+    available_talent_points,
     doctrine_art_ids,
+    equipment_candidates,
+    in_use_doctrine,
     render_apply_preview,
     render_art_choices,
     render_art_slots,
-    render_delete_confirmation,
     render_doctrine_detail,
     render_doctrine_root,
     render_editor,
     render_equipment_choices,
     render_equipment_slots,
-    render_overwrite_preview,
-    render_paths,
-    render_talent_choices,
-    render_talent_slots,
+    render_name_prompt,
+    render_talent_page,
+)
+from asterion.bot.text_prompt import (
+    PROMPTS,
+    HasPrompt,
+    PendingPrompt,
+    consume_reply,
+    show_on_prompt,
 )
 from asterion.domain.economy import crowns_per_level, path_switch_cost
-from asterion.domain.equipment import assignment_for_item_slot
-from asterion.domain.paths import PATHS_BY_CLASS
-from asterion.domain.talents import TALENTS_BY_CLASS
+from asterion.domain.talents import TALENTS_BY_CLASS, talent_points_at_level
 
-DOCTRINE_PROMPT = "Responda a esta mensagem com o nome da Doutrina."
+NAME_PROMPT_KIND = "doc:name"
+NAME_ERRORS = {
+    "invalid_name": f"⚠️ O nome deve ter de 1 a {MAX_DOCTRINE_NAME_CHARACTERS} caracteres.",
+    "duplicate_name": "⚠️ Já existe uma Doutrina com esse nome.",
+}
+STALE_ERRORS = {
+    "stale_input": "A solicitação ficou desatualizada. Abra Doutrinas novamente.",
+    "stale_configuration": "A configuração mudou. Abra Doutrinas novamente.",
+    "stale_doctrine": "A Doutrina foi atualizada. Abra novamente.",
+    "limit": "O limite de Doutrinas foi atingido.",
+    "foreground": "Não é possível alterar Doutrinas durante uma atividade.",
+}
 
 
 def _from36(value: str) -> int:
@@ -46,29 +70,43 @@ def _uuid(value: str) -> UUID:
     return UUID(hex=value)
 
 
+def apply_cost(view, doctrine) -> int:
+    """Coroas cobradas ao usar a Doutrina, pelas regras já existentes de troca (GDD)."""
+    target = doctrine.configuration
+    cost = 0
+    if target["path"] != view.selected_path and view.selected_path is not None:
+        cost += path_switch_cost(view.level)
+    current_pairs = {
+        (item["point_slot"], item["talent_id"]) for item in view.current_configuration["talents"]
+    }
+    target_pairs = {(item["point_slot"], item["talent_id"]) for item in target["talents"]}
+    if target_pairs != current_pairs and not current_pairs.issubset(target_pairs):
+        cost += 2 * crowns_per_level(view.level)
+    return cost
+
+
 def doctrines_router(service: DoctrineService, images: dict[str, str]) -> Router:
     router = Router(name="character_doctrines")
     router.message.filter(F.chat.type == "private")
     router.callback_query.filter(F.message.chat.type == "private")
 
-    async def current_view(query):
-        return await service.view(query.from_user.id)
+    async def show(query: CallbackQuery, screen) -> None:
+        if isinstance(query.message, Message):
+            await present(query.message, screen, images, edit=True)
 
-    async def show_root(query, *, alert: str | None = None):
-        if not isinstance(query.message, Message):
-            return
-        view = await current_view(query)
+    async def show_root(
+        query: CallbackQuery, *, alert: str | None = None, notice: str | None = None
+    ) -> None:
+        view = await service.view(query.from_user.id)
         if view is None:
             await query.answer("Personagem indisponível.", show_alert=True)
             return
-        if alert:
-            await query.answer(alert, show_alert=True)
-        await present(query.message, render_doctrine_root(view), images, edit=True)
+        await query.answer(alert or notice, show_alert=bool(alert))
+        await show(query, render_doctrine_root(view))
 
-    async def show_detail(query, doctrine_id: UUID, *, expected_revision: int | None = None):
-        if not isinstance(query.message, Message):
-            return None
-        view = await current_view(query)
+    async def load(query: CallbackQuery, doctrine_id: UUID, expected_revision: int | None):
+        """A Doutrina atual; com revisão desatualizada, volta à lista de Doutrinas."""
+        view = await service.view(query.from_user.id)
         if view is None:
             await query.answer("Personagem indisponível.", show_alert=True)
             return None
@@ -77,225 +115,207 @@ def doctrines_router(service: DoctrineService, images: dict[str, str]) -> Router
             expected_revision is not None and doctrine.revision != expected_revision
         ):
             await query.answer("A Doutrina foi atualizada.", show_alert=True)
-            await present(query.message, render_doctrine_root(view), images, edit=True)
+            await show(query, render_doctrine_root(view))
             return None
-        await present(query.message, render_doctrine_detail(view, doctrine), images, edit=True)
         return view, doctrine
 
-    async def show_editor(query, doctrine_id, expected_revision):
-        result = await show_detail(query, doctrine_id, expected_revision=expected_revision)
-        if result is None or not isinstance(query.message, Message):
-            return
-        view, doctrine = result
-        await present(query.message, render_editor(view, doctrine), images, edit=True)
+    async def reload(query: CallbackQuery, doctrine_id: UUID):
+        return await load(query, doctrine_id, None)
 
-    async def start_name_prompt(query, action, config_version, doctrine_id=None, revision=0):
+    async def open_name_prompt(query, action, config_version, back, doctrine_id=None, revision=0):
         if not isinstance(query.message, Message):
             return
-        view = await current_view(query)
+        view = await service.view(query.from_user.id)
         if view is None:
             await query.answer("Personagem indisponível.", show_alert=True)
             return
         if view.foreground:
-            await query.answer("Configuração bloqueada durante atividade.", show_alert=True)
+            await query.answer(STALE_ERRORS["foreground"], show_alert=True)
             return
-        prompt = await query.message.answer(
-            f"{DOCTRINE_PROMPT} Limite técnico de {MAX_DOCTRINE_NAME_CHARACTERS} caracteres.",
-            reply_markup=ForceReply(selective=True, input_field_placeholder="Nome da Doutrina"),
-            parse_mode=None,
-        )
         try:
             started = await service.begin_name_input(
                 query.from_user.id,
                 action,
-                prompt.message_id,
+                query.message.message_id,
                 config_version,
                 doctrine_id=doctrine_id,
                 expected_revision=revision,
             )
-        except DoctrineRejected:
-            started = False
+        except DoctrineRejected as exc:
+            await show_root(query, alert=STALE_ERRORS.get(exc.code, "A tela foi atualizada."))
+            return
         if not started:
-            await prompt.edit_text("A tela foi atualizada. Abra Doutrinas para tentar novamente.")
-            await show_root(query)
-            await query.answer("A tela foi atualizada.", show_alert=True)
+            await show_root(query, alert="A tela foi atualizada.")
+            return
+        await query.answer()
+        await show(query, render_name_prompt(back))
+        PROMPTS.open(query.from_user.id, NAME_PROMPT_KIND, query.message, {"back": back})
+
+    async def toggle_talent(query, doctrine_id, revision, config_version, index) -> None:
+        result = await load(query, doctrine_id, revision)
+        if result is None:
+            return
+        view, doctrine = result
+        options = TALENTS_BY_CLASS[view.character_class]
+        if index >= len(options):
+            raise ValueError
+        talent = options[index]
+        values = list(doctrine.configuration["talents"])
+        if any(item["talent_id"] == talent.talent_id for item in values):
+            values = [item for item in values if item["talent_id"] != talent.talent_id]
         else:
-            await query.answer("Envie o nome em resposta à solicitação.")
+            if talent.level > view.level:
+                raise ValueError
+            if available_talent_points(view, doctrine) <= 0:
+                await query.answer(REASON_LABELS["talent_points"], show_alert=True)
+                return
+            used = {item["point_slot"] for item in values}
+            free = next(
+                slot
+                for slot in range(1, talent_points_at_level(view.level) + 1)
+                if slot not in used
+            )
+            values.append({"point_slot": free, "talent_id": talent.talent_id})
+        await service.update_component(
+            query.from_user.id, doctrine_id, revision, config_version, "talents", values
+        )
+        page = TALENT_LEVELS.index(talent.level) // TALENT_LEVELS_PER_PAGE
+        result = await reload(query, doctrine_id)
+        if result:
+            await query.answer()
+            await show(query, render_talent_page(*result, page))
+
+    async def use(query, doctrine_id, revision, config_version, *, confirmed: bool) -> None:
+        result = await load(query, doctrine_id, revision)
+        if result is None:
+            return
+        view, doctrine = result
+        if view.configuration_version != config_version:
+            await show_root(query, alert="A configuração mudou. Revise a Doutrina.")
+            return
+        current = in_use_doctrine(view)
+        if current is not None and current.doctrine_id == doctrine.doctrine_id:
+            await query.answer("Esta Doutrina já está em uso.")
+            return
+        if not doctrine.can_apply:
+            reason = doctrine.incomplete_reason or ("foreground" if view.foreground else None)
+            await query.answer(
+                REASON_LABELS.get(reason, "A Doutrina não pode ser usada agora."),
+                show_alert=True,
+            )
+            return
+        cost = apply_cost(view, doctrine)
+        if cost and not confirmed:
+            await query.answer()
+            await show(query, render_apply_preview(view, doctrine, cost))
+            return
+        await service.apply(query.from_user.id, doctrine_id, revision, config_version)
+        await show_root(query, notice="Doutrina em uso.")
 
     @router.callback_query(F.data == "character:doctrines")
     async def open_root(query: CallbackQuery):
-        await query.answer()
         await show_root(query)
 
     @router.callback_query(F.data.startswith("doc:"))
     async def navigate(query: CallbackQuery):
         parts = (query.data or "").split(":")
+        action = parts[1] if len(parts) > 1 else ""
         try:
             if parts == ["doc", "r"]:
-                await query.answer()
                 await show_root(query)
                 return
-            if len(parts) == 3 and parts[1] == "n":
-                await start_name_prompt(query, "create", _from36(parts[2]))
+            if action == "n" and len(parts) == 3:
+                await open_name_prompt(query, "create", _from36(parts[2]), "doc:r")
                 return
-            if len(parts) < 3:
+            if len(parts) < 4:
                 raise ValueError
-            doctrine_id = _uuid(parts[2]) if parts[1] not in {"r"} else None
-            if parts[1] == "d" and len(parts) == 4:
-                await query.answer()
-                await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                return
-            if parts[1] == "ed" and len(parts) == 5:
-                await query.answer()
-                await show_editor(query, doctrine_id, _from36(parts[3]))
-                return
-            if parts[1] == "nm" and len(parts) == 5:
-                await start_name_prompt(
-                    query, "rename", _from36(parts[4]), doctrine_id, _from36(parts[3])
-                )
-                return
-            if parts[1] == "ep" and len(parts) == 5:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
+            doctrine_id, revision = _uuid(parts[2]), _from36(parts[3])
+            if action == "d" and len(parts) == 4:
+                result = await load(query, doctrine_id, revision)
                 if result:
-                    view, doctrine = result
-                    await present(
-                        query.message,
-                        render_paths(view, doctrine, PATHS_BY_CLASS[view.character_class]),
-                        images,
-                        edit=True,
-                    )
                     await query.answer()
+                    await show(query, render_doctrine_detail(*result))
                 return
-            if parts[1] == "p" and len(parts) == 6:
-                revision, config_version, index = (
-                    _from36(parts[3]),
-                    _from36(parts[4]),
-                    _from36(parts[5]),
+            if action == "x" and len(parts) == 4:
+                await service.delete(query.from_user.id, doctrine_id, revision)
+                await show_root(query, notice="Doutrina excluída.")
+                return
+            if len(parts) < 5:
+                raise ValueError
+            config_version = _from36(parts[4])
+            keys = ":".join(parts[2:5])
+            if action in {"u", "ok"} and len(parts) == 5:
+                await use(query, doctrine_id, revision, config_version, confirmed=action == "ok")
+                return
+            if action == "nm" and len(parts) == 5:
+                await open_name_prompt(
+                    query, "rename", config_version, f"doc:ed:{keys}", doctrine_id, revision
                 )
-                result = await show_detail(query, doctrine_id, expected_revision=revision)
-                if not result:
-                    return
-                view, doctrine = result
-                options = PATHS_BY_CLASS[view.character_class]
-                if index > len(options):
-                    raise ValueError
-                path = None if index == 0 else options[index - 1]
-                await service.update_component(
-                    query.from_user.id, doctrine_id, revision, config_version, "path", path
+                return
+            if action == "tt" and len(parts) == 6:
+                await toggle_talent(
+                    query, doctrine_id, revision, config_version, _from36(parts[5])
                 )
-                await query.answer("Caminho salvo.")
-                await show_detail(query, doctrine_id)
                 return
-            if parts[1] == "es" and len(parts) == 5:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    await present(query.message, render_equipment_slots(*result), images, edit=True)
-                    await query.answer()
+            result = await load(query, doctrine_id, revision)
+            if result is None:
                 return
-            if parts[1] == "eq" and len(parts) == 6:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if not result:
-                    return
-                view, doctrine = result
+            view, doctrine = result
+            if action == "ed" and len(parts) == 5:
+                screen = render_editor(view, doctrine)
+            elif action == "es" and len(parts) == 5:
+                screen = render_equipment_slots(view, doctrine)
+            elif action == "as" and len(parts) == 5:
+                screen = render_art_slots(view, doctrine)
+            elif action == "ts" and len(parts) == 6:
+                screen = render_talent_page(view, doctrine, _from36(parts[5]))
+            elif action == "eq" and len(parts) == 6:
                 slot_index = _from36(parts[5])
-                await present(
-                    query.message,
-                    render_equipment_choices(
-                        view,
-                        doctrine,
-                        slot_index,
-                        await service.owned_equipment(query.from_user.id) or (),
-                    ),
-                    images,
-                    edit=True,
-                )
-                await query.answer()
-                return
-            if parts[1] == "ei" and len(parts) == 7:
-                revision, config_version = _from36(parts[3]), _from36(parts[4])
-                slot_index = _from36(parts[5])
-                result = await show_detail(query, doctrine_id, expected_revision=revision)
-                if not result:
-                    return
-                view, doctrine = result
-                labels = (
-                    "Principal",
-                    "Secundária",
-                    "Cabeça",
-                    "Torso",
-                    "Mãos",
-                    "Pés",
-                    "Acessório",
-                    "Artefato",
-                )
-                if slot_index >= len(labels):
+                if slot_index >= len(EQUIPMENT_SLOT_LABELS):
                     raise ValueError
-                slot = labels[slot_index]
-                token = parts[6]
+                owned = await service.owned_equipment(query.from_user.id) or ()
+                screen = render_equipment_choices(view, doctrine, slot_index, owned)
+            elif action == "ei" and len(parts) == 7:
+                slot_index = _from36(parts[5])
+                if slot_index >= len(EQUIPMENT_SLOT_LABELS):
+                    raise ValueError
                 selected = None
-                if token != "x":
-                    candidates = []
-                    for item in await service.owned_equipment(query.from_user.id) or ():
-                        assignment = assignment_for_item_slot(item[2])
-                        if assignment and assignment.slot.value == slot:
-                            candidates.append(item)
-                    index = _from36(token)
+                if parts[6] != "x":
+                    owned = await service.owned_equipment(query.from_user.id) or ()
+                    candidates = equipment_candidates(owned, slot_index)
+                    index = _from36(parts[6])
                     if index >= len(candidates):
                         raise ValueError
                     selected = candidates[index][0]
-                mutation = await service.update_component(
+                await service.update_component(
                     query.from_user.id,
                     doctrine_id,
                     revision,
                     config_version,
                     "equipment",
-                    (slot, selected),
+                    (EQUIPMENT_SLOT_LABELS[slot_index], selected),
                 )
-                await query.answer("Equipamento salvo.")
-                await show_editor(
-                    query,
-                    doctrine_id,
-                    revision + (1 if mutation is not None and mutation.changed else 0),
-                )
-                return
-            if parts[1] == "as" and len(parts) == 5:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    await present(query.message, render_art_slots(*result), images, edit=True)
-                    await query.answer()
-                return
-            if parts[1] == "al" and len(parts) == 6:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if not result:
+                result = await reload(query, doctrine_id)
+                if result is None:
                     return
-                view, doctrine = result
+                screen = render_equipment_slots(*result)
+            elif action == "al" and len(parts) == 7:
                 slot = _from36(parts[5])
                 if slot not in {1, 2, 3}:
                     raise ValueError
-                await present(
-                    query.message, render_art_choices(view, doctrine, slot), images, edit=True
-                )
-                await query.answer()
-                return
-            if parts[1] == "ai" and len(parts) == 7:
-                revision, config_version, slot = (
-                    _from36(parts[3]),
-                    _from36(parts[4]),
-                    _from36(parts[5]),
-                )
-                result = await show_detail(query, doctrine_id, expected_revision=revision)
-                if not result:
-                    return
-                view, doctrine = result
-                token = parts[6]
+                screen = render_art_choices(view, doctrine, slot, _from36(parts[6]))
+            elif action == "ai" and len(parts) == 7:
+                slot = _from36(parts[5])
+                if slot not in {1, 2, 3}:
+                    raise ValueError
                 art_id = None
-                if token != "x":
+                if parts[6] != "x":
                     arts = doctrine_art_ids(view, doctrine)
-                    index = _from36(token)
+                    index = _from36(parts[6])
                     if index >= len(arts):
                         raise ValueError
                     art_id = arts[index]
-                mutation = await service.update_component(
+                await service.update_component(
                     query.from_user.id,
                     doctrine_id,
                     revision,
@@ -303,202 +323,58 @@ def doctrines_router(service: DoctrineService, images: dict[str, str]) -> Router
                     "arts",
                     (slot, art_id),
                 )
-                await query.answer("Artes salvas.")
-                await show_editor(
-                    query,
-                    doctrine_id,
-                    revision + (1 if mutation is not None and mutation.changed else 0),
-                )
-                return
-            if parts[1] == "ts" and len(parts) == 5:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    await present(query.message, render_talent_slots(*result), images, edit=True)
-                    await query.answer()
-                return
-            if parts[1] == "tl" and len(parts) == 6:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if not result:
+                result = await reload(query, doctrine_id)
+                if result is None:
                     return
-                view, doctrine = result
-                slot = _from36(parts[5])
-                await present(
-                    query.message, render_talent_choices(view, doctrine, slot), images, edit=True
-                )
-                await query.answer()
-                return
-            if parts[1] == "ti" and len(parts) == 7:
-                revision, config_version, point_slot = (
-                    _from36(parts[3]),
-                    _from36(parts[4]),
-                    _from36(parts[5]),
-                )
-                result = await show_detail(query, doctrine_id, expected_revision=revision)
-                if not result:
-                    return
-                view, doctrine = result
-                values = list(doctrine.configuration["talents"])
-                token = parts[6]
-                if token == "x":
-                    values = [item for item in values if item["point_slot"] != point_slot]
-                else:
-                    options = TALENTS_BY_CLASS[view.character_class]
-                    index = _from36(token)
-                    if index >= len(options):
-                        raise ValueError
-                    selected = options[index]
-                    values = [item for item in values if item["point_slot"] != point_slot]
-                    values.append({"point_slot": point_slot, "talent_id": selected.talent_id})
-                mutation = await service.update_component(
-                    query.from_user.id, doctrine_id, revision, config_version, "talents", values
-                )
-                await query.answer("Talentos salvos.")
-                await show_editor(
-                    query,
-                    doctrine_id,
-                    revision + (1 if mutation is not None and mutation.changed else 0),
-                )
-                return
-            if parts[1] == "ow" and len(parts) == 5:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    view, doctrine = result
-                    await present(
-                        query.message,
-                        render_overwrite_preview(doctrine, _from36(parts[4])),
-                        images,
-                        edit=True,
-                    )
-                    await query.answer()
-                return
-            if parts[1] == "owok" and len(parts) == 5:
-                mutation = await service.overwrite_current(
-                    query.from_user.id, doctrine_id, _from36(parts[3]), _from36(parts[4])
-                )
-                await query.answer("Doutrina atualizada.")
-                await show_detail(
-                    query,
-                    doctrine_id,
-                    expected_revision=_from36(parts[3])
-                    + (1 if mutation is not None and mutation.changed else 0),
-                )
-                return
-            if parts[1] == "del" and len(parts) == 4:
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    await present(
-                        query.message, render_delete_confirmation(result[1]), images, edit=True
-                    )
-                    await query.answer()
-                return
-            if parts[1] == "x" and len(parts) == 4:
-                await service.delete(query.from_user.id, doctrine_id, _from36(parts[3]))
-                await query.answer("Doutrina excluída.")
-                await show_root(query)
-                return
-            if parts[1] == "ap" and len(parts) == 5:
-                expected_configuration_version = _from36(parts[4])
-                result = await show_detail(query, doctrine_id, expected_revision=_from36(parts[3]))
-                if result:
-                    view, doctrine = result
-                    if view.configuration_version != expected_configuration_version:
-                        await show_root(query, alert="A configuração mudou. Revise a Doutrina.")
-                        return
-                    target = doctrine.configuration
-                    cost = 0
-                    if target["path"] != view.selected_path and view.selected_path is not None:
-                        cost += path_switch_cost(view.level)
-                    current_talent_rows = view.current_configuration["talents"]
-                    current_talent_pairs = {
-                        (item["point_slot"], item["talent_id"]) for item in current_talent_rows
-                    }
-                    target_talent_pairs = {
-                        (item["point_slot"], item["talent_id"])
-                        for item in target["talents"]
-                    }
-                    if (
-                        target_talent_pairs != current_talent_pairs
-                        and not current_talent_pairs.issubset(target_talent_pairs)
-                    ):
-                        cost += 2 * crowns_per_level(view.level)
-                    requires_review = cost > 0 or target["path"] != view.selected_path
-                    if doctrine.can_apply and requires_review:
-                        await present(
-                            query.message,
-                            render_apply_preview(view, doctrine, cost),
-                            images,
-                            edit=True,
-                        )
-                    elif doctrine.can_apply:
-                        await service.apply(
-                            query.from_user.id,
-                            doctrine_id,
-                            doctrine.revision,
-                            expected_configuration_version,
-                        )
-                        await query.answer("Doutrina aplicada.")
-                        await show_detail(
-                            query, doctrine_id, expected_revision=doctrine.revision
-                        )
-                        return
-                    else:
-                        await present(
-                            query.message, render_doctrine_detail(view, doctrine), images, edit=True
-                        )
-                    await query.answer()
-                return
-            if parts[1] == "ok" and len(parts) == 5:
-                await service.apply(
-                    query.from_user.id, doctrine_id, _from36(parts[3]), _from36(parts[4])
-                )
-                await query.answer("Doutrina aplicada.")
-                await show_detail(query, doctrine_id)
-                return
-            if parts[1] == "ed" and len(parts) == 5:
-                await query.answer()
-                await show_editor(query, doctrine_id, _from36(parts[3]))
-                return
-        except (ValueError, DoctrineRejected):
-            await show_root(
-                query, alert="A Doutrina ou configuração mudou. Revise e tente novamente."
-            )
-            return
-        await show_root(query, alert="A tela foi atualizada.")
-
-    @router.message(F.text, F.reply_to_message)
-    async def doctrine_name_reply(message: Message):
-        if message.from_user is None or message.text is None:
-            raise SkipHandler()
-        prompt = message.reply_to_message
-        if (
-            prompt is None
-            or prompt.from_user is None
-            or not prompt.from_user.is_bot
-            or not (prompt.text or "").startswith(DOCTRINE_PROMPT)
-        ):
-            raise SkipHandler()
-        if message.text.startswith("/"):
-            raise SkipHandler()
-        try:
-            await service.save_name_reply(message.from_user.id, prompt.message_id, message.text)
+                screen = render_art_slots(*result)
+            else:
+                raise ValueError
+            await query.answer()
+            await show(query, screen)
         except DoctrineRejected as exc:
-            messages = {
-                "invalid_name": "O nome deve ter de 1 a 40 caracteres.",
-                "duplicate_name": "Já existe uma Doutrina com esse nome.",
-                "stale_input": "Esta solicitação ficou desatualizada. Abra Doutrinas novamente.",
-                "stale_configuration": "A configuração mudou. Abra Doutrinas novamente.",
-                "stale_doctrine": "A Doutrina foi atualizada. Abra novamente.",
-                "limit": "O limite de cinco Doutrinas foi atingido.",
-                "foreground": "Não é possível alterar Doutrinas durante uma atividade.",
-            }
-            await message.answer(messages.get(exc.code, "Não foi possível salvar a Doutrina."))
-            return
-        view = await service.view(message.from_user.id)
-        if view is not None:
-            await present(message, render_doctrine_root(view), images)
+            message = REASON_LABELS.get(exc.code) or STALE_ERRORS.get(
+                exc.code, "A Doutrina ou configuração mudou. Revise e tente novamente."
+            )
+            await show_root(query, alert=message)
+        except ValueError:
+            await show_root(query, alert="A tela foi atualizada.")
 
-    @router.message(F.text.startswith("/"))
-    async def pass_commands(message: Message):
-        raise SkipHandler()
+    @router.message(F.text, HasPrompt(NAME_PROMPT_KIND))
+    async def doctrine_name(message: Message, prompt: PendingPrompt):
+        actor = message.from_user.id
+        await consume_reply(message)
+        back = prompt.data.get("back", "doc:r")
+        try:
+            mutation = await service.save_name_reply(actor, prompt.message_id, message.text or "")
+        except DoctrineRejected as exc:
+            if exc.code in NAME_ERRORS:
+                # O pedido continua aberto na mesma tela, com o aviso.
+                await show_on_prompt(
+                    message, prompt, render_name_prompt(back, NAME_ERRORS[exc.code]), images
+                )
+                PROMPTS.follow(actor, prompt)
+                return
+            PROMPTS.close(actor)
+            view = await service.view(actor)
+            if view is not None:
+                await show_on_prompt(message, prompt, render_doctrine_root(view), images)
+            return
+        PROMPTS.close(actor)
+        view = await service.view(actor)
+        if view is None:
+            return
+        doctrine = next(
+            (
+                item
+                for item in view.doctrines
+                if mutation is not None and item.doctrine_id == mutation.doctrine_id
+            ),
+            None,
+        )
+        if back != "doc:r" and doctrine is not None:
+            screen = render_editor(view, doctrine)
+        else:
+            screen = render_doctrine_root(view)
+        await show_on_prompt(message, prompt, screen, images)
 
     return router

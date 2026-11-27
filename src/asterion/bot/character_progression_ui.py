@@ -1,5 +1,6 @@
 """Player-facing Talents and Active Arts screens."""
 
+import re
 from html import escape
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,7 +11,6 @@ from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
-    LUMINAR_ART_IDS,
     ORACULO_ART_IDS,
     TECELAO_ART_IDS,
     active_art_definition,
@@ -506,196 +506,142 @@ def _art_mechanics_lines(action) -> list[str]:
     return lines
 
 
-def render_art_root(view: ActiveArtCharacterView) -> Screen:
+# Especificação consolidada 2026-11-26, Parte I §7–§9.
+ARTS_TITLE = "🧿 Artes"
+ARTS_TEXT = (
+    "Artes são técnicas especiais que permitem canalizar habilidades únicas durante os "
+    "confrontos de Asterion."
+)
+ARTS_PER_PAGE = 4
+# Descrições de Arte definidas pela Fonte; sem descrição, a linha não aparece.
+ART_DESCRIPTIONS = {
+    "sentinela.golpe_de_guarda": (
+        "O golpe usa o peso da lâmina e a firmeza da guarda para atingir o inimigo em um "
+        "movimento direto."
+    ),
+}
+ART_CATEGORY_EMOJI = {
+    "Ataque": "⚔️",
+    "Efeito": "🌀",
+    "Suporte": "✨",
+    "Preparação": "🛡️",
+    "Manifestação": "🔮",
+}
+_KEYCAPS = ("1️⃣", "2️⃣", "3️⃣")
+# Regras de Presságio das Artes do Oráculo, mostradas junto da mecânica da Arte.
+ART_OMEN_LINES = {
+    ORACULO_ART_IDS["augurio_favoravel"]: (
+        "🔮 Buff positivo bem-sucedido · gera Presságio Defensivo no alvo.",
+    ),
+    ORACULO_ART_IDS["selo_da_queda"]: (
+        "🔮 Debuff normal aplicado com sucesso · gera Presságio Ofensivo no alvo.",
+        "🔮 Presságio Ofensivo preexistente no alvo · fortalece o Dano Direto.",
+    ),
+}
+_FIELD_LINE = re.compile(r"^(\S+) ([^·]+?) · (.+)$")
+
+
+def _art_emoji(action) -> str:
+    return ART_CATEGORY_EMOJI.get(_art_category(action), "⚔️")
+
+
+def _art_description(art_id: str) -> str | None:
+    return next(
+        (text for key, text in ART_DESCRIPTIONS.items() if art_id.endswith(key)), None
+    )
+
+
+def _field_html(line: str) -> str:
+    """``⚔️ Dano · 110% ATQ`` → ``⚔️ <b>Dano</b> · <code>110% ATQ</code>``."""
+    match = _FIELD_LINE.match(line)
+    if match is None:
+        return escape(line)
+    emoji, label, value = match.groups()
+    return f"{emoji} <b>{escape(label)}</b> · <code>{escape(value)}</code>"
+
+
+def render_art_root(view: ActiveArtCharacterView, page: int = 0) -> Screen:
     actions = _actions_for_view(view)
-    art_ids = _art_ids(view)
-    equipped = {slot.art_id: slot.slot for slot in view.slots}
-    lines = [
-        "🎴 Artes",
-        "",
-        *_character_lines(view.character_name, view.character_class, view.selected_path),
-        "",
-        "🎴 Artes Equipadas",
-    ]
-    rows = []
+    version = _base36(view.combat_configuration_version)
+    equipped_lines = []
     for slot in (1, 2, 3):
         art_id = next((entry.art_id for entry in view.slots if entry.slot == slot), None)
-        if art_id is None:
-            lines.append(f"{slot} · Vazio")
-            continue
-        action = actions[art_id]
-        index = _art_index(view, art_id)
-        lines.append(f"{slot} {escape(action.name)} · {_art_category(action)}")
-        if notice := _eligibility_notice(view, art_id):
-            lines.append(notice)
-        if notice := _weapon_requirement_notice(view, art_id):
-            lines.append(notice)
-        rows.append(
-            [
-                _button(
-                    str(slot),
-                    f"art:d:{_base36(index)}:{_base36(view.combat_configuration_version)}",
-                )
-            ]
+        name = actions[art_id].name if art_id in actions else "Vazio"
+        equipped_lines.append(f"{_KEYCAPS[slot - 1]} <code>{escape(name)}</code>")
+    known = list(_art_ids(view))
+    pages = max(1, -(-len(known) // ARTS_PER_PAGE))
+    page = min(max(page, 0), pages - 1)
+    shown = known[page * ARTS_PER_PAGE : (page + 1) * ARTS_PER_PAGE]
+    known_lines = [
+        f"{_art_emoji(actions[art_id])} <code>{escape(actions[art_id].name)}</code>"
+        for art_id in shown
+    ]
+    buttons = [
+        _button(
+            f"{_art_emoji(actions[art_id])} {actions[art_id].name.split()[0]}",
+            f"art:d:{_base36(_art_index(view, art_id))}:{version}",
         )
-    lines.extend(["", "📚 Outras Artes"])
-    other_buttons = []
-    for art_id in art_ids:
-        if art_id in equipped:
-            continue
-        action = actions[art_id]
-        index = _art_index(view, art_id)
-        lines.append(f"{index + 1} {escape(action.name)} · {_art_category(action)}")
-        if notice := _weapon_requirement_notice(view, art_id):
-            lines.append(notice)
-        other_buttons.append(
-            _button(
-                str(index + 1),
-                f"art:d:{_base36(index)}:{_base36(view.combat_configuration_version)}",
-            )
-        )
-    rows.extend([other_buttons[i : i + 3] for i in range(0, len(other_buttons), 3)])
-    if view.foreground:
-        lines.extend(["", "🔒 Configuração · Bloqueada durante a atividade"])
-    rows.append([_button("← Personagem", "character:root")])
-    return with_flavor(Screen("\n".join(lines), "character", _keyboard(rows)), "artes")
+        for art_id in shown
+    ]
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    navigation = []
+    if page > 0:
+        navigation.append(_button("◀️ Anterior", f"art:p:{page - 1}"))
+    if page < pages - 1:
+        navigation.append(_button("▶️ Próxima", f"art:p:{page + 1}"))
+    if navigation:
+        rows.append(navigation)
+    rows.append([_button("↩️ Retornar", "character:root")])
+    parts = [
+        f"<b>{escape(ARTS_TITLE)}</b>",
+        f"<i>{escape(ARTS_TEXT)}</i>",
+        "✨ <b>Artes Equipadas</b>\n\n" + "\n".join(equipped_lines),
+        "📚 <b>Artes Conhecidas</b>\n\n" + "\n".join(known_lines)
+        if known_lines
+        else "📚 <b>Artes Conhecidas</b>",
+    ]
+    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
 
 
 def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
+    """Detalhe da Arte: a escolha da posição acontece aqui mesmo (§8–§9).
+
+    Não há campo separado de Requisito de Arma: a compatibilidade continua como regra
+    do sistema e é verificada ao equipar.
+    """
     action = _actions_for_view(view)[art_id]
     definition = active_art_definition(art_id)
     art_index = _art_index(view, art_id)
+    version = _base36(view.combat_configuration_version)
     equipped_slot = next((entry.slot for entry in view.slots if entry.art_id == art_id), None)
-    incompatible = art_id in view.weapon_incompatible_art_ids
-    lines = [
-        f"🎴 {escape(action.name)}",
-        f"Arte Ativa · {_class_label(view.character_class)}"
-        + (
-            f" · {escape(PATH_DEFINITIONS[definition.path_id].name)}"
-            if definition is not None and definition.path_id in PATH_DEFINITIONS
-            else ""
-        ),
-        "",
-    ]
-    if definition is not None:
-        lines.insert(2, f"🔓 Desbloqueio · Nv.{definition.min_level}")
-    lines.extend(_art_mechanics_lines(action))
-    if definition is not None and definition.weapon_requirement:
-        lines.extend(
-            [
-                "",
-                "🗡️ Requisito de arma · "
-                + escape(weapon_requirement_label(definition)),
-            ]
-        )
-    elif art_id == TECELAO_ART_IDS["geada_tecida"]:
-        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
-    elif art_id == TECELAO_ART_IDS["surto_do_veu"]:
-        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
-    elif art_id == ORACULO_ART_IDS["augurio_favoravel"]:
-        lines.extend(
-            [
-                "",
-                "🗡️ Requisito de arma · Nenhum",
-                "🔮 Buff positivo bem-sucedido · gera Presságio Defensivo no alvo.",
-            ]
-        )
-    elif art_id == ORACULO_ART_IDS["selo_da_queda"]:
-        lines.extend(
-            [
-                "",
-                "🗡️ Requisito de arma · Nenhum",
-                "🔮 Debuff normal aplicado com sucesso · gera Presságio Ofensivo no alvo.",
-                "🔮 Presságio Ofensivo preexistente no alvo · fortalece o Dano Direto.",
-            ]
-        )
-    elif art_id == LUMINAR_ART_IDS["luz_restauradora"]:
-        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
-    elif art_id == LUMINAR_ART_IDS["explosao_solar"]:
-        lines.extend(["", "🗡️ Requisito de arma · Nenhum"])
-    if incompatible:
-        lines.append("🔒 Requisito não atendido · equipe uma arma compatível.")
-    if notice := _eligibility_notice(view, art_id):
-        lines.extend(["", notice])
-    if equipped_slot is not None:
-        lines.extend(["", f"🧩 Slot · {equipped_slot}"])
-    rows = []
-    if equipped_slot is not None and not view.foreground:
-        rows.append(
-            [
-                _button(
-                    "Desequipar Arte",
-                    f"art:u:{_base36(equipped_slot)}:{_base36(view.combat_configuration_version)}",
-                )
-            ]
-        )
-    elif (
-        equipped_slot is None
-        and not incompatible
-        and art_id not in view.ineligible_art_ids
-        and not view.foreground
-    ):
-        rows.append(
-            [
-                _button(
-                    "Equipar Arte",
-                    f"art:e:{_base36(art_index)}:{_base36(view.combat_configuration_version)}",
-                )
-            ]
-        )
-    elif view.foreground:
-        lines.extend(["", "🔒 Configuração · Bloqueada durante a atividade"])
-    rows.append([_button("← Artes", f"art:r:{_base36(view.combat_configuration_version)}")])
-    return Screen("\n".join(lines), "character", _keyboard(rows))
-
-
-def render_art_slot_choice(view: ActiveArtCharacterView, art_id: str) -> Screen:
-    if art_id in view.weapon_incompatible_art_ids:
-        return render_art_detail(view, art_id)
-    action = _actions_for_view(view)[art_id]
-    art_index = _art_index(view, art_id)
-    filled = {entry.slot: entry.art_id for entry in view.slots}
-    empty_slots = [slot for slot in (1, 2, 3) if slot not in filled]
-    replacing = not empty_slots
-    target_slots = (1, 2, 3) if replacing else empty_slots
-    lines = [
-        "🎴 Equipar Arte",
-        "",
-        f"{escape(action.name)}",
-        f"Arte Ativa · "
-        f"{_character_lines(view.character_name, view.character_class, view.selected_path)[1]}",
-        "",
-        *_art_mechanics_lines(action),
-        "",
-        "🎴 Artes Equipadas",
-    ]
-    if art_id == LUMINAR_ART_IDS["explosao_solar"]:
-        lines.extend(["🗡️ Requisito de arma · Nenhum", ""])
-    rows = []
-    for slot in (1, 2, 3):
-        current_id = filled.get(slot)
-        if current_id is None:
-            lines.append(f"{slot} · Vazio")
-        else:
-            lines.append(f"{slot} {escape(_actions_for_view(view)[current_id].name)}")
-    lines.extend(
-        ["", "Escolha um slot vazio." if not replacing else "Escolha qual Arte deseja substituir."]
+    parts = [f"{_art_emoji(action)} <b>{escape(action.name)}</b>"]
+    if description := _art_description(art_id):
+        parts.append(f"<i>{escape(description)}</i>")
+    parts.append("\n".join(_field_html(line) for line in _art_mechanics_lines(action)))
+    if omen := ART_OMEN_LINES.get(art_id):
+        parts.append("\n".join(escape(line) for line in omen))
+    origin = _class_label(view.character_class) + (
+        f" · {PATH_DEFINITIONS[definition.path_id].name}"
+        if definition is not None and definition.path_id in PATH_DEFINITIONS
+        else ""
     )
-    if not view.foreground:
-        rows.append(
-            [
-                _button(
-                    str(slot),
-                    f"art:s:{_base36(art_index)}:{slot}:{_base36(view.combat_configuration_version)}",
-                )
-                for slot in target_slots
-            ]
-        )
-    rows.append(
+    about = []
+    if definition is not None:
+        about.append(_field_html(f"🔓 Desbloqueio · Nv. {definition.min_level}"))
+    about.append(_field_html(f"🛡️ Arte Ativa · {origin}"))
+    parts.append("\n".join(about))
+    rows = [
         [
             _button(
-                "← Arte", f"art:d:{_base36(art_index)}:{_base36(view.combat_configuration_version)}"
+                f"{_KEYCAPS[slot - 1]} Equipar Arte [Slot {slot}]",
+                f"art:s:{_base36(art_index)}:{slot}:{version}",
             )
         ]
-    )
-    return Screen("\n".join(lines), "character", _keyboard(rows))
+        for slot in (1, 2, 3)
+    ]
+    if equipped_slot is not None:
+        rows.append(
+            [_button("❌ Desequipar", f"art:u:{_base36(equipped_slot)}:{version}")]
+        )
+    rows.append([_button("↩️ Retornar", "art:r")])
+    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")

@@ -33,6 +33,7 @@ from asterion.domain.combat_math import (
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import Account, Character
+from tests.ui_plain import plain
 
 SURTO = "class_art.tecelao.surto_do_veu"
 FIO = TECELAO_ART_IDS["fio_cortante"]
@@ -426,13 +427,13 @@ async def test_surto_level_gate_three_slots_persistence_and_ui(database):
     view = await service.view(actor)
     assert view is not None and SURTO in view.available_art_ids
     detail = render_art_detail(view, SURTO)
-    assert "Surto do Véu" in detail.text
-    assert "Nv.34" in detail.text
-    assert "145% ATQ" in detail.text
-    assert "1 Inimigo" in detail.text
-    assert "3 Rodadas" in detail.text
-    assert "Requisito de arma · Nenhum" in detail.text
-    assert "Trama Encadeada" in detail.text
+    assert "Surto do Véu" in plain(detail.text)
+    assert "Nv. 34" in plain(detail.text)
+    assert "145% ATQ" in plain(detail.text)
+    assert "1 Inimigo" in plain(detail.text)
+    assert "3 Rodadas" in plain(detail.text)
+    assert "Requisito de arma" not in plain(detail.text)
+    assert "Trama Encadeada" in plain(detail.text)
 
     await service.equip_art(actor, 1, FIO)
     await service.equip_art(actor, 2, TECELAO_ART_IDS["chama_tecida"])

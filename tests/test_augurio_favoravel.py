@@ -33,6 +33,7 @@ from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, resolve_combat_s
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import Account, Character
+from tests.ui_plain import plain
 
 AUGURIO = ORACULO_ART_IDS["augurio_favoravel"]
 BUFF_ID = "oraculo.augurio_favoravel.attack"
@@ -363,12 +364,12 @@ async def test_augurio_level_gate_configuration_ui_doctrine_and_post_legado_reva
     assert eligible is not None and AUGURIO in eligible.available_art_ids
     assert eligible.selected_path is None
     screen = render_art_detail(eligible, AUGURIO)
-    assert "Augúrio Favorável" in screen.text
-    assert "+10.00%" in screen.text and "ATQ" in screen.text
-    assert "2T" in screen.text and "Recarga · 4 Rodadas" in screen.text
-    assert "Você ou Aliado" in screen.text
-    assert "Requisito de arma · Nenhum" in screen.text
-    assert "gera Presságio Defensivo" in screen.text
+    assert "Augúrio Favorável" in plain(screen.text)
+    assert "+10.00%" in plain(screen.text) and "ATQ" in plain(screen.text)
+    assert "2T" in plain(screen.text) and "Recarga · 4 Rodadas" in plain(screen.text)
+    assert "Você ou Aliado" in plain(screen.text)
+    assert "Requisito de arma" not in plain(screen.text)
+    assert "gera Presságio Defensivo" in plain(screen.text)
 
     mutation = await service.equip_art(actor, 1, AUGURIO)
     assert mutation is not None and mutation.changed
