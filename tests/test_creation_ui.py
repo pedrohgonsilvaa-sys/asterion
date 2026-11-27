@@ -78,11 +78,11 @@ def test_name_errors_and_confirmation_exact_copy():
     format_screen = render(replace(base, error="format"))
     assert "👤 <b>Nome</b>" in format_screen.text
     assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
-    assert "⚠️ Envie no chat o nome desejado." in format_screen.text
+    assert "⚠️ <b>Envie no chat o nome desejado.</b>" in format_screen.text
     unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
     assert "👤 <b>Nome</b>" in unavailable_screen.text
     assert "⚠️ Nome indisponível. Digite outro nome no chat." in unavailable_screen.text
-    assert "⚠️ Envie no chat o nome desejado." not in unavailable_screen.text
+    assert "Envie no chat o nome desejado." not in unavailable_screen.text
     assert "Luiken" not in unavailable_screen.text
     assert "· Indisponível" not in unavailable_screen.text
     assert "Tente outro nome novamente" not in unavailable_screen.text

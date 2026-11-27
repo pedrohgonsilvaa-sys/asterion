@@ -1601,13 +1601,9 @@ def allowed_actions(state: Combat, fighter_key: str | None = None) -> tuple[str,
     ]
     if player.last_action != "defend":
         allowed.append("defend")
-    mask = {
-        "basics": ("attack", "defend"),
-        "attack": ("attack",),
-        "defend": ("defend",),
-        "art": ("art",),
-    }.get(state.tutorial_stage)
-    return tuple(action for action in allowed if mask is None or action in mask)
+    # Decisão do autor 2026-11-27 (Correções oficiais Tutorial/HUD §1): o tutorial não
+    # libera mais Atacar, Defender e Arte um por um; todas as ações valem desde o turno 1.
+    return tuple(allowed)
 
 
 _RESGUARDO_DEFAULT_STATS = frozenset(

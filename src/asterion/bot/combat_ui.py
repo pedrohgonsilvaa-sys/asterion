@@ -1833,6 +1833,9 @@ def _render_combat(view: CombatView) -> Screen:
     )
     buttons = []
     target_button_rows = []
+    # Prólogo §12: Atacar, Defender e depois as Artes, uma por linha.
+    basics_first = {"attack": 0, "defend": 1}
+    available = sorted(available, key=lambda key: basics_first.get(key, 2))
     for action in available:
         if action == "attack":
             label, hint = "⚔️ Atacar", "⚔️ Atacar · Causa Dano"
@@ -1844,20 +1847,6 @@ def _render_combat(view: CombatView) -> Screen:
             # Bloco UI 1 §7: the button is the character's real Art, emoji + name.
             label = art_label(art.name, action)
             hint = clean
-            if not is_trial and state.tutorial_stage == "art":
-                lines.extend(
-                    [
-                        f"🎴 <b>{escape(clean)}</b> · Arte de Classe",
-                        f"⚔️ Dano · <code>{number(art.coefficient * 100)}%</code> ATQ",
-                        "⏳ Recarga · <code>2</code>",
-                    ]
-                )
-                if art.attack_debuff:
-                    lines.insert(
-                        -1,
-                        f"🌀 Efeito · −<code>{number(art.attack_debuff * 100)}%</code> ATQ "
-                        f"por <code>{art.duration}T</code>",
-                    )
         if not is_trial:
             lines.append(hint)
             if action not in {"attack", "defend"}:

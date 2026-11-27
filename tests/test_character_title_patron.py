@@ -28,7 +28,7 @@ async def test_new_character_persists_the_starting_title_and_hud_shows_it(databa
     assert view.patron_active is False
     text = render_refuge_dashboard(view).text
     assert "🎖️ <code>Caminhante das Cinzas</code>" in text
-    assert "👑 <b>Ainda não é um Patrono de Asterion.</b>" in text
+    assert "Patrono" not in text
 
 
 @pytest.mark.asyncio

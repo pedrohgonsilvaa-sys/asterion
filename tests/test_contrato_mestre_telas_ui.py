@@ -23,7 +23,7 @@ def _callbacks(screen) -> list[str]:
 def test_identity_variants():
     full = identity(emoji="🏹", name="Oppan", level=1, legacy_level=1, guild_tag="CIN")
     assert full == (
-        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>\n"
+        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1</code> · <code>Legado I</code>\n"
         "🎖️ <code>Caminhante das Cinzas</code>"
     )
     assert identity(emoji="🏹", name="Oppan", level=12).startswith(

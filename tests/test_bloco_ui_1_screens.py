@@ -81,9 +81,8 @@ def test_hud_layout_and_menu_order():
     blocks = screen.text.split("\n\n")
     assert blocks[0] == "<b>🌘 Refúgio do Ocaso</b>"
     assert blocks[1].splitlines() == [
-        "🏹 <b>Ornn</b> · <code>Nv. 1 · Legado I</code>",
+        "🏹 <b>Ornn</b> · <code>Nv. 1</code> · <code>Legado I</code>",
         "🎖️ <code>Caminhante das Cinzas</code>",
-        "👑 <b>Ainda não é um Patrono de Asterion.</b>",
         "🪙 <b>Coroas</b> · <code>1.250</code>",
     ]
     assert blocks[2].splitlines() == [

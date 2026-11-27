@@ -66,8 +66,9 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     ) in screen.text
     assert "O Primeiro Confronto" not in screen.text and "combate começa" not in screen.text
     assert "Causa Dano" not in screen.text and "Reduz Dano" not in screen.text
+    # Decisão do autor 2026-11-27: Atacar, Defender e a Arte desde o turno 1.
     assert [[button.text for button in row] for row in screen.keyboard.inline_keyboard] == [
-        ["⚔️ Atacar"], ["🛡️ Defender"]
+        ["⚔️ Atacar"], ["🛡️ Defender"], ["🗡️ Golpe de Guarda"]
     ]
     assert all(
         forbidden not in screen.text
@@ -382,7 +383,9 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     view = await prologue.enter(1)
     view = await prologue.action(1, view.activity_id, view.combat.version, "attack")
     screen = render_combat(view)
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🛡️ Defender"]
+    assert [row[0].text for row in screen.keyboard.inline_keyboard] == [
+        "⚔️ Atacar", "🛡️ Defender", "🗡️ Golpe de Guarda"
+    ]
     assert "<code>🌐 Turno 2 · ⏱️ 10s</code>" in screen.text
     assert "⚔️ O golpe atinge o Cão Cinéreo e causa <b>" in screen.text
     assert "🐺 O Cão Cinéreo ataca e causa <b>" in screen.text or "💨 O ataque do" in screen.text
@@ -390,7 +393,9 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     assert "O som se aproxima" not in screen.text
     view = await prologue.action(1, view.activity_id, view.combat.version, "defend")
     screen = render_combat(view)
-    assert [button.text for button in screen.keyboard.inline_keyboard[0]] == ["🗡️ Golpe de Guarda"]
+    assert [row[0].text for row in screen.keyboard.inline_keyboard] == [
+        "⚔️ Atacar", "🗡️ Golpe de Guarda"
+    ]
     assert "<code>🌐 Turno 3 · ⏱️ 10s</code>" in screen.text
     assert "🛡️ Defender foi usado." in screen.text
     assert "Arte de Classe" not in screen.text
