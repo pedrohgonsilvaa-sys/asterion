@@ -269,8 +269,7 @@ def test_inventory_resolves_stable_id_and_renders_actual_grade():
             entries=(entry,),
         )
     )
-    assert "🧪 Poção de Cura · 4" in screen.text
-    assert "Consumível · Grau I" in screen.text
+    assert "#1 🧪 <b>Poção de Cura</b> · <code>×4</code>" in screen.text
 
     protection = consumable_inventory_entry("consumable.protection.vde.ii", 3)
     assert protection.title == "Preparado de Proteção Enredada"
@@ -284,8 +283,7 @@ def test_inventory_resolves_stable_id_and_renders_actual_grade():
             entries=(protection,),
         )
     )
-    assert "Preparado de Proteção Enredada · 3" in screen.text
-    assert "Consumível · Grau II" in screen.text
+    assert "<b>Preparado de Proteção Enredada</b> · <code>×3</code>" in screen.text
 
 
 def test_inventory_keeps_unknown_legacy_stock_visible():

@@ -323,7 +323,7 @@ def _render_listing(view: InventoryView, page: int) -> Screen:
     listing = (
         render_item_list(entries, ids=[entry.key for entry in entries])
         if entries
-        else "<i>Nenhum item neste filtro.</i>"
+        else "Nenhum item neste filtro."
     )
     header = "\n".join(
         (
@@ -356,7 +356,7 @@ def render_pending(view: InventoryView, page: int = 0) -> Screen:
     listing = (
         render_item_list(entries, ids=[entry.key for entry in entries], blocked=blocked)
         if entries
-        else "<i>Nenhuma Entrega Pendente.</i>"
+        else "Nenhuma Entrega Pendente."
     )
     header = "\n".join(
         (_field("🗳️", "Espaço", f"{view.pending_count}/{view.pending_capacity}"), *page_line(page, pages))  # noqa: E501
