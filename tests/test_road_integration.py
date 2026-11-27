@@ -783,7 +783,15 @@ async def test_exploration_start_settles_opening_defeat_and_reconnects(database,
 
 
 @pytest.mark.asyncio
-async def test_hunt_victory_receipt_reconstructs_without_duplicate_reward(database):
+async def test_hunt_victory_receipt_reconstructs_without_duplicate_reward(database, monkeypatch):
+    import random
+
+    import asterion.application.road as road_module
+
+    # A Caçada sorteia criatura, variante e dados a partir de uuid4(); sem fixar a
+    # semente, o Sentinela Nv.1 às vezes perde e o teste falha por sorteio.
+    rng = random.Random(771104)
+    monkeypatch.setattr(road_module, "uuid4", lambda: UUID(int=rng.getrandbits(128), version=4))
     actor, service = await _seed_road(database, 771104)
     await service.travel(actor, ROAD)
     view = await service.start_hunt(actor)
