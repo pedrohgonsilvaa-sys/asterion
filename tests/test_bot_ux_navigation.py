@@ -50,10 +50,8 @@ def _button(screen, label):
 
 def test_adventure_hub_exposes_only_shared_activities():
     screen = render_adventure()
-    # Decisão do autor 2026-11-26 §4: Refúgio, Desbravar, Caçadas e Masmorras.
-    assert set(_callbacks(screen)) == {
-        "refuge:local", "tdo:explore", "tdo:hunt", "dungeon:known", "menu:back"
-    }
+    # Fluxo de UI aprovado §1.5: Desbravar, Masmorras e Retornar.
+    assert set(_callbacks(screen)) == {"tdo:explore", "dungeon:known", "menu:back"}
 
 
 def test_campaign_root_only_exposes_navigation_and_contextual_activities():

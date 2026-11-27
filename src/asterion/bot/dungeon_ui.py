@@ -19,6 +19,7 @@ from asterion.bot.ui_format import (
     column,
     field,
     narrative,
+    pairs,
     reward_html,
     rewards,
 )
@@ -73,10 +74,22 @@ DUNGEON_ENCOUNTERS = 5
 RUPTURE_LEVEL = 60
 ORDINAL_NAMES = {1: "Primeiro", 2: "Segundo", 3: "Terceiro", 4: "Quarto"}
 DUNGEONS_TEXT = (
-    "As masmorras conduzem a incursões estruturadas por diferentes encontros até um "
-    "confronto final. Cada incursão possui seus próprios perigos, duração, custo de Vigor "
-    "e regras de recuperação."
+    "Alguns caminhos não terminam nas estradas abertas. Entre ruínas esquecidas, passagens "
+    "ocultas e estruturas consumidas pelo tempo, existem lugares onde os perigos das Terras "
+    "do Ocaso se aprofundam."
 )
+# Nomes curtos só nos botões de seleção; a tela individual usa o nome completo da Masmorra.
+SHORT_BUTTON_NAMES = {
+    "dungeon.tdo.cripta_ocaso": "Cripta",
+    "dungeon.tdo.galerias_vigia": "Galerias",
+}
+DUNGEON_INTRO_TEXT = (
+    "Uma passagem esquecida conduz para além das trilhas conhecidas. O ar muda à medida que "
+    "avança. As paredes guardam marcas de quem esteve aqui antes — e nem todas parecem ter "
+    "partido."
+)
+INTRO_FAMILIES = frozenset(SHORT_BUTTON_NAMES)
+ENTER_CALLBACK_PREFIX = "dungeon:enter:"
 
 
 def _emoji(family_id: str) -> str:
@@ -149,15 +162,18 @@ def render_dungeon_difficulty(view: DungeonView, suffix: str) -> Screen:
     return Screen(text, "dungeon_crypt", _kb(*rows, back(back_to)), "HTML")
 
 
-def _render_dungeons(view: DungeonView) -> Screen:
+def _render_dungeons(view: DungeonView, *, difficulties: bool = False) -> Screen:
     if view.kind == "known":
         options = [
-            button(f"{_emoji(family_id)} {name}", FAMILY_CALLBACKS.get(family_id, "dungeon:known"))
+            button(
+                f"{_emoji(family_id)} {SHORT_BUTTON_NAMES.get(family_id, name)}",
+                FAMILY_CALLBACKS.get(family_id, "dungeon:known"),
+            )
             for family_id, name, *_ in view.known_dungeons
         ]
         text = blocks("🗝️ <b>Masmorras</b>", narrative(DUNGEONS_TEXT))
         return Screen(
-            text, "dungeon_crypt", _kb(*column(*options), back("menu:back")), "HTML"
+            text, "dungeon_crypt", _kb(*pairs(options), back("adv:hub")), "HTML"
         )
     if view.kind in {"empty", "hidden"}:
         return Screen(
@@ -176,6 +192,15 @@ def _render_dungeons(view: DungeonView) -> Screen:
                     inline_keyboard=[[_button("↩️ Retornar", "dungeon:known")]]
                 ),
             )
+        if view.family_id in INTRO_FAMILIES and not difficulties:
+            # Tela individual aprovada (§1.8/§1.9): nome completo e emoji próprios, resolvidos
+            # da Masmorra selecionada; ⚔️ Entrar abre a escolha de dificuldade.
+            return Screen(
+                blocks(_dungeon_title(view), narrative(DUNGEON_INTRO_TEXT), _notice(view)),
+                "dungeon_crypt",
+                _kb([button("⚔️ Entrar", f"{ENTER_CALLBACK_PREFIX}{key}")], back("dungeon:known")),
+                "HTML",
+            )
         text = blocks(
             _dungeon_title(view),
             narrative(
@@ -190,7 +215,17 @@ def _render_dungeons(view: DungeonView) -> Screen:
             for suffix, (_, label) in DIFFICULTY_BUTTONS.items()
         ]
         return Screen(
-            text, "dungeon_crypt", _kb(*column(*options), back("dungeon:known")), "HTML"
+            text,
+            "dungeon_crypt",
+            _kb(
+                *column(*options),
+                back(
+                    FAMILY_CALLBACKS[view.family_id]
+                    if view.family_id in INTRO_FAMILIES
+                    else "dungeon:known"
+                ),
+            ),
+            "HTML",
         )
     if view.kind == "invite":
         text = (
@@ -515,6 +550,6 @@ def render_dungeon_targets(view: DungeonView, action_index: int) -> Screen:
     )
 
 
-def render_dungeons(view: DungeonView) -> Screen:
+def render_dungeons(view: DungeonView, *, difficulties: bool = False) -> Screen:
     """Dungeon screen with the art of its family (see asset_catalog)."""
-    return with_dungeon_art(_render_dungeons(view), view.family_id)
+    return with_dungeon_art(_render_dungeons(view, difficulties=difficulties), view.family_id)

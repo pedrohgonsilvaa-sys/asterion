@@ -1,7 +1,7 @@
 """Transactional entry, recovery, actions and fixed one-off prologue reward."""
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -76,6 +76,10 @@ class CombatView:
     trial_stage_caption: str | None = None
     combat_actor_key: str | None = None
     campaign_shared: bool | None = None
+    # True only on the single call that actually resolved the combat (victory or defeat).
+    # Every later read of the finished attempt returns the same snapshot with this False, so
+    # handlers show the outcome screen exactly once and treat repeats as a safe no-op.
+    resolved_now: bool = field(default=False, compare=False)
 
 
 def choose_enemy_id() -> str:
@@ -257,7 +261,7 @@ class PrologueService:
             ):
                 # Reconcile only the provable pre-v1.4.7 tutorial softlock.
                 await self._complete_prologue_after_combat(session, character, activity)
-                return view(character, activity, encounter, record)
+                return replace(view(character, activity, encounter, record), resolved_now=True)
             if activity.status == "active" and turn_expired(current.combat):
                 # Server-side timeout: the overdue turn is spent exactly once, whether
                 # it is found by a late action or by a plain resume.
@@ -268,7 +272,10 @@ class PrologueService:
                     character.hp = expired.fighters["player"].hp
                     if expired.result == "defeat":
                         await self._complete_prologue_after_combat(session, character, activity)
-                    return view(character, activity, encounter, record)
+                    return replace(
+                        view(character, activity, encounter, record),
+                        resolved_now=expired.result == "defeat",
+                    )
             if (
                 intent is None
                 or intent[:2] != (activity.id, activity.state_version)
@@ -291,12 +298,20 @@ class PrologueService:
                 await self._complete_prologue_after_combat(session, character, activity)
             elif updated.result == "defeat":
                 await self._complete_prologue_after_combat(session, character, activity)
-            return view(character, activity, encounter, record)
+            return replace(
+                view(character, activity, encounter, record),
+                resolved_now=updated.result in {"victory", "defeat"},
+            )
 
     async def _complete_prologue_after_combat(
         self, session: AsyncSession, character: Character, activity: GameActivity
     ) -> None:
-        """Converge valid tutorial results on the first brazier boundary."""
+        """Converge valid tutorial results on the first brazier boundary.
+
+        Runs at most once per attempt: a completed activity is never closed again.
+        """
+        if activity.status == "completed":
+            return
         activity.status = "completed"
         character.stage = POST_COMBAT_STAGE
         character.ruleset_version = CHARACTER_RULESET

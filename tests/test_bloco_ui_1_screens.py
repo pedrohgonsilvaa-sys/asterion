@@ -79,14 +79,14 @@ def test_rewards_block_has_no_blank_line_plus_or_multiplier():
 def test_hud_layout_and_menu_order():
     screen = render_refuge_dashboard(_view(legacy_level=1))
     blocks = screen.text.split("\n\n")
-    assert blocks[0] == "<b>🌘 Refúgio do Ocaso</b>"
+    assert blocks[0] == "<b>🌘 Terras do Ocaso</b>"
     assert blocks[1].splitlines() == [
         "🏹 <b>Ornn</b> · <code>Nv. 1</code> · <code>Legado I</code>",
         "🎖️ <code>Caminhante das Cinzas</code>",
         "🪙 <b>Coroas</b> · <code>1.250</code>",
     ]
     assert blocks[2].splitlines() == [
-        "❤️ <b>HP</b> · <code>631/631</code>",
+        "❤️ <b>Vida</b> · <code>631/631</code>",
         "🟥" * 10,
         "⚡ <b>Vigor</b> · <code>100/100</code>",
         "🟨" * 10,
@@ -290,7 +290,8 @@ def test_prologue_specific_corrections():
 
 
 def test_creation_review_and_class_texts_are_objective():
-    for key in ("confirm", "class"):
+    # O texto de revisão aprovado (UI §1.2) abre com "Seu personagem": só a Classe é objetiva.
+    for key in ("class",):
         text = COPY[key]
         assert "Seu " not in text and "Sua " not in text and "seu " not in text
 
@@ -382,9 +383,11 @@ def test_dungeon_screens_follow_the_mold_with_canonical_values():
             **base,
         )
     )
-    assert _labels(known) == [["🏚️ Cripta do Ocaso"], ["🏛️ Galerias do Vigia"], ["↩️ Retornar"]]
+    assert _labels(known) == [["🏚️ Cripta", "🏛️ Galerias"], ["↩️ Retornar"]]
     detail_view = DungeonView("detail", **base)
-    detail = render_dungeons(detail_view)
+    intro = render_dungeons(detail_view)
+    assert _labels(intro) == [["⚔️ Entrar"], ["↩️ Retornar"]]
+    detail = render_dungeons(detail_view, difficulties=True)
     assert _labels(detail) == [["🟢 Estável"], ["🟠 Fraturada"], ["🔴 Ruptura"], ["↩️ Retornar"]]
     assert "Estável" not in detail.text.split("\n")[0]
     stable = render_dungeon_difficulty(detail_view, "s")

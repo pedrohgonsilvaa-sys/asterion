@@ -153,7 +153,7 @@ async def test_return_from_discovered_local_shows_refuge_without_moving(database
 
     screen = await _press(sessions, road, actor, callback_data)
 
-    assert "Refúgio do Ocaso" in screen.text
+    assert "Terras do Ocaso" in screen.text
     assert await _snapshot(sessions, actor) == before
 
 
@@ -177,7 +177,7 @@ async def test_return_during_active_p1_on_road_shows_refuge_without_moving(
 
     screen = await _press(sessions, road, actor, callback_data)
 
-    assert "Refúgio do Ocaso" in screen.text
+    assert "Terras do Ocaso" in screen.text
     after = await _snapshot(sessions, actor)
     assert after == before
     assert after["location"] == ROAD
@@ -219,5 +219,5 @@ async def test_refuge_return_when_already_at_refuge_keeps_state(database):
 
     screen = await _press(sessions, road, actor, "menu:back")
 
-    assert "Refúgio do Ocaso" in screen.text
+    assert "Terras do Ocaso" in screen.text
     assert await _snapshot(sessions, actor) == before

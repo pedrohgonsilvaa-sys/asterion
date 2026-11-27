@@ -1,13 +1,13 @@
 {
   "screens": {
-    "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ **Envie no chat o nome desejado.**",
-    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ **Envie no chat o nome desejado.**",
+    "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n✍️ Envie no chat o nome desejado. Utilize de 3 a 16 caracteres; apenas letras e espaços; sem números, símbolos ou nome repetido.",
+    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n✍️ Envie no chat o nome desejado. Utilize de 3 a 16 caracteres; apenas letras e espaços; sem números, símbolos ou nome repetido.",
     "name_unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ Nome indisponível. Digite outro nome no chat.",
     "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. O gênero define como um personagem se apresenta em Asterion._",
     "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. A origem acompanha permanentemente cada personagem e influencia, de forma sutil, a maneira como enfrenta os perigos do mundo._",
     "class": "⚜️ **Classe**\n\n_A Classe define as bases do estilo de combate e os Caminhos que poderão ser despertados mais adiante. A escolha é permanente e acompanhará o personagem._",
-    "confirm": "📜 **Revisar Personagem**\n\n_Nome, origem e vocação estão definidos. Os dados do personagem podem ser conferidos antes do início da jornada._",
-    "confirm_warning": "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."
+    "confirm": "📜 **Revisar Personagem**\n\n_Seu personagem está pronto para iniciar a jornada. Revise os dados abaixo antes de confirmar sua entrada em Asterion._",
+    "confirm_warning": "‼️ Gênero, Raça e Classe não poderão ser alterados após a confirmação."
   },
   "races": {
     "remanescente": {

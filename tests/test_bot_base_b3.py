@@ -105,7 +105,7 @@ async def test_legacy_callbacks_from_active_p1_road_show_refuge_without_moving(
 
     await bot.session.close()
     screen = _last_screen(bot)
-    assert "Refúgio do Ocaso" in screen.text
+    assert "Terras do Ocaso" in screen.text
     async with sessions() as session:
         world = await session.scalar(select(WorldState))
         assert world.location == ROAD
@@ -428,7 +428,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
         bot, callback_update("world:adventure", actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "Refúgio do Ocaso" in screen.text
+    assert "Terras do Ocaso" in screen.text
     labels = {
         button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
@@ -439,11 +439,11 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     )
     screen = _last_screen(bot)
     # Decisão do autor 2026-11-26 §4: ⚔️ Aventura abre o próprio submenu.
-    assert screen.text == "<b>⚔️ Aventura</b>"
+    assert screen.text.startswith("<b>⚔️ Aventura</b>\n\n<i>As Terras do Ocaso guardam")
     labels = {
         button.text for row in screen.reply_markup.inline_keyboard for button in row
     }
-    assert {"🌘 Refúgio", "⛰️ Desbravar", "🐺 Caçadas", "🗝️ Masmorras"} <= labels
+    assert {"⛰️ Desbravar", "🗝️ Masmorras", "↩️ Retornar"} == labels
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, callback_update("settings:root", actor=actor, update_id=update_id)
