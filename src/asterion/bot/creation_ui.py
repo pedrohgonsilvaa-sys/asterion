@@ -137,10 +137,8 @@ def render(state: Creation) -> Screen:
             f"{SCREENS['confirm_warning']}"
         )
         rows = [
-            [button("✅ Confirmar Personagem", "confirm")],
-            [button("👤 Nome", "name"), button("🎭 Gênero", "gender")],
-            [button("🧿 Raça", "race"), button("⚜️ Classe", "class")],
-            [button("↩️ Retornar", "classes")],
+            [button("✅ Confirmar", "confirm")],
+            [button("↩️ Voltar", "classes")],
         ]
     image_key = step
     if state.gender and step.startswith("race:"):

@@ -203,7 +203,7 @@ def finish(enemy_id: str, result: str) -> CombatView:
 def test_outcome_brazier_and_ending_never_name_the_character(name):
     hp = Decimal(100)
     outcomes = (
-        ("victory", "🏆 Caminho Aberto", "🔥 Chama"),
+        ("victory", "🏆 Caminho Aberto", "🔥 Continuar"),
         ("defeat", "🩸 O Caminho Interrompido", "🔥 Seguir até a chama"),
     )
     for result, title, flame in outcomes:

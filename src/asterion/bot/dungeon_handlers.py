@@ -43,6 +43,17 @@ def dungeon_router(service: DungeonService, images: dict[str, str]) -> Router:
             await service.detail(query.from_user.id, "dungeon.tdo.galerias_vigia"),
         )
 
+    @router.callback_query(F.data.regexp(r"^dungeon:enter:[a-z]$"))
+    async def enter_dungeon(query: CallbackQuery):
+        """⚔️ Entrar na tela individual: abre a escolha de dificuldade da mesma Masmorra."""
+        family = FAMILY_BY_KEY.get((query.data or "").rsplit(":", 1)[-1])
+        view = await service.detail(query.from_user.id, family) if family else None
+        await query.answer()
+        if view is not None and isinstance(query.message, Message):
+            await present(
+                query.message, render_dungeons(view, difficulties=True), images, edit=True
+            )
+
     @router.callback_query(F.data == "dungeon:fosso")
     async def fosso(query: CallbackQuery):
         await show(query, await service.detail(query.from_user.id, "dungeon.vde.fosso_raizes"))

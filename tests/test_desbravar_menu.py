@@ -68,14 +68,13 @@ def test_desbravar_menu_layout_and_text():
     assert screen.text.startswith("<b>⛰️ Desbravar</b>\n\n<i>As Terras do Ocaso se estendem")
     assert screen.text.endswith("uma ameaça à espreita.</i>")
     assert _labels(screen.keyboard) == [
-        ["🗝️ Masmorras", "🌘 Refúgio do Ocaso"],
-        ["🔥 Estrada das Cinzas", "🌑 Charneca da Fuligem"],
-        ["🌲 Bosque Calcinado", "🏚️ Ruínas do Vigia"],
-        ["🕯️ Câmara do Poente"],
+        ["🌒 Refúgio", "🔥 Estrada"],
+        ["🌑 Charneca", "🌲 Bosque"],
+        ["🏚️ Ruínas", "🕯️ Câmara"],
         ["↩️ Retornar"],
     ]
     data = [b.callback_data for row in screen.keyboard.inline_keyboard for b in row]
-    assert data[:2] == ["dungeon:known", "refuge:local"]
+    assert data[0] == "refuge:local"
     assert data[-1] == "adv:hub"
     assert "Caçada" not in screen.text + " ".join(
         b.text for row in screen.keyboard.inline_keyboard for b in row

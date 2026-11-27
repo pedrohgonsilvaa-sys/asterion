@@ -374,10 +374,16 @@ def combat_router(
             return render_road(view)
         return render_combat(view)
 
-    def prologue_outcome(view) -> bool:
+    def prologue_finished(view) -> bool:
         return getattr(view, "context", None) == "prologue" and getattr(
             getattr(view, "combat", None), "result", None
         ) in {"victory", "defeat"}
+
+    def prologue_outcome(view) -> bool:
+        """True only for the one call that resolved the combat: the outcome screen is shown
+        once. Repeats (double tap, stale callback, reconnect) get the same finished snapshot
+        with ``resolved_now`` False and never produce another victory/defeat screen."""
+        return prologue_finished(view) and bool(getattr(view, "resolved_now", False))
 
     @router.callback_query(F.data.regexp(r"^pl:[a-z]{3,12}$"))
     async def prologue_scene(query: CallbackQuery):
@@ -439,6 +445,9 @@ def combat_router(
         if view is not None and isinstance(query.message, Message):
             if road is not None and hasattr(view, "kind"):
                 await present(query.message, render_road(view), images, edit=True)
+                return
+            if prologue_finished(view) and not prologue_outcome(view):
+                # Already-resolved attempt: stale button or repeated tap. Safe no-op.
                 return
             if prologue_outcome(view):
                 await present(query.message, render_combat(view), images, edit=True)

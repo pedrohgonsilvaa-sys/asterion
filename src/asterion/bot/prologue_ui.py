@@ -22,6 +22,13 @@ ENDING_CALLBACK = "menu:back"
 BAR_SEGMENTS = 10
 ENCOUNTER_LOCATION = "tdo.location.estrada_das_cinzas"
 ROAD_IMAGE_KEY = "local:Estrada das Cinzas"
+# Image key of every Prologue state (resolved by asset_catalog.build_asset_images: a dedicated
+# ``prologo_*`` file when it exists, otherwise the closest canonical art already shipped).
+SCENE_IMAGE_PREFIX = "prologue."
+OUTCOME_VICTORY_IMAGE = "prologue.vitoria"
+OUTCOME_DEFEAT_IMAGE = "prologue.derrota"
+BRAZIER_IMAGE = "brazier_estrada"
+ENDING_IMAGE = "prologue.refugio"
 _CONTINUE = "🛤️ Avançar"
 PURSE_LINE = "🪙 <code>18 Coroas</code>"
 RESIDUE_LINE = "💧 <code>1 Resíduo do Ocaso</code>"
@@ -109,8 +116,9 @@ def render_scene(node_id: str, *, show_objects: bool = False) -> Screen:
             for label, target in buttons
         ]
     )
-    # Bloco UI 1 §8 item 10: "Cinzas na Estrada" usa a arte da Estrada.
-    image = ROAD_IMAGE_KEY if node_id == "cinzas" else "prologue"
+    # Bloco UI 1 §8 item 10: "Cinzas na Estrada" usa a arte da Estrada; cada outra cena tem a
+    # sua própria chave contextual (nunca uma imagem genérica única para todas).
+    image = ROAD_IMAGE_KEY if node_id == "cinzas" else f"{SCENE_IMAGE_PREFIX}{node_id}"
     return Screen("\n\n".join(parts), image, keyboard, "HTML")
 
 
@@ -321,12 +329,15 @@ def render_prologue_outcome(view) -> Screen:
     if view.combat.result == "victory":
         text = (
             "<b>🏆 Caminho Aberto</b>\n\n"
-            "<i>O último golpe derruba a criatura. Por alguns instantes, apenas o vento volta "
-            "a ocupar a estrada.</i>\n\n"
-            "<i>O confronto chega ao fim, e a estrada permanece aberta adiante.</i>\n\n"
+            "<i>Você desfere o último golpe e a criatura cai. Por alguns instantes, apenas o "
+            "vento volta a ocupar a estrada.</i>\n\n"
+            "<i>O confronto chega ao fim. À sua frente, a estrada permanece aberta, coberta de "
+            "cinzas e silêncio.</i>\n\n"
             + "\n".join(("🎁 <b>Recompensas:</b>", *VICTORY_REWARD_LINES))
         )
-        return Screen(text, "prologue", _column([("🔥 Chama", FLAME_CALLBACK)]), "HTML")
+        return Screen(
+            text, OUTCOME_VICTORY_IMAGE, _column([("🔥 Continuar", FLAME_CALLBACK)]), "HTML"
+        )
     else:
         text = (
             "<b>🩸 O Caminho Interrompido</b>\n\n"
@@ -335,7 +346,9 @@ def render_prologue_outcome(view) -> Screen:
             "<i>Quando a visão retorna, uma pequena chama permanece acesa entre as ruínas, "
             "iluminando o caminho adiante.</i>"
         )
-    return Screen(text, "prologue", _column([("🔥 Seguir até a chama", FLAME_CALLBACK)]), "HTML")
+    return Screen(
+        text, OUTCOME_DEFEAT_IMAGE, _column([("🔥 Seguir até a chama", FLAME_CALLBACK)]), "HTML"
+    )
 
 
 def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
@@ -356,7 +369,7 @@ def render_brazier(name: str, hp: Decimal, max_hp: Decimal) -> Screen:
     ]
     return Screen(
         "\n".join(lines).rstrip(),
-        "brazier_estrada",
+        BRAZIER_IMAGE,
         _column([("🔥 Descansar", "world:rest")]),
         "HTML",
     )
@@ -370,4 +383,4 @@ def render_prologue_ending(name: str | None = None) -> Screen:
         "de cinza. O primeiro trecho da jornada ficou para trás, mas o caminho adiante "
         "permanece aberto, levando para além da estrada recém-atravessada.</i>"
     )
-    return Screen(text, "brazier_estrada", _column([("🛤️ Continuar", ENDING_CALLBACK)]), "HTML")
+    return Screen(text, ENDING_IMAGE, _column([("🛤️ Continuar", ENDING_CALLBACK)]), "HTML")

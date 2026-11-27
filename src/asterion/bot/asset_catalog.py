@@ -50,6 +50,20 @@ _BONFIRE_FILE = {
     "vde.brazier.vigilia_do_vale": "braseiro_vigilia",
 }
 
+# Prologue state -> (dedicated file stem in assets/maps/terras do ocaso, fallback image key).
+# A dedicated ``prologo_*`` file wins; otherwise the closest canonical art already shipped is used,
+# so no Prologue screen is ever rendered without a picture.
+_PROLOGUE_ART = {
+    "rastros": ("prologo_rastros", "p1"),
+    "destrocos": ("prologo_destrocos", "local:Estrada das Cinzas"),
+    "queimada": ("prologo_queimada", "local:Estrada das Cinzas"),
+    "silencio": ("prologo_silencio", "local:Estrada das Cinzas"),
+    "pedras": ("prologo_pedras", "local:Estrada das Cinzas"),
+    "vitoria": ("prologo_vitoria", "local:Estrada das Cinzas"),
+    "derrota": ("prologo_derrota", "tdo.brazier.estrada"),
+    "refugio": ("prologo_refugio", "local:Refúgio do Ocaso"),
+}
+
 # Screens that show the first permanent Brazier keep their historical key.
 _ALIASES = {"brazier_estrada": "tdo.brazier.estrada"}
 
@@ -643,4 +657,11 @@ def build_asset_images(brazier_ids: tuple[str, ...], root: Path | None = None) -
     for alias, target in _ALIASES.items():
         if target in images:
             images[alias] = images[target]
+    for node, (stem, fallback) in _PROLOGUE_ART.items():
+        ref = _pattern(base, "maps/terras do ocaso", stem) or images.get(fallback)
+        if ref:
+            images[f"prologue.{node}"] = ref
+    if location_key(road.ROAD) in images:
+        # Generic Prologue key (combat/consumable screens before the creature art applies).
+        images.setdefault("prologue", images[location_key(road.ROAD)])
     return images

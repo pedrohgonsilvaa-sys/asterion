@@ -78,7 +78,10 @@ def test_name_errors_and_confirmation_exact_copy():
     format_screen = render(replace(base, error="format"))
     assert "👤 <b>Nome</b>" in format_screen.text
     assert "⚠️ Nome inválido. Envie outro nome no chat." in format_screen.text
-    assert "⚠️ <b>Envie no chat o nome desejado.</b>" in format_screen.text
+    assert (
+        "✍️ Envie no chat o nome desejado. Utilize de 3 a 16 caracteres; apenas letras e "
+        "espaços; sem números, símbolos ou nome repetido."
+    ) in format_screen.text
     unavailable_screen = render(replace(base, error="unavailable", rejected_name="Luiken"))
     assert "👤 <b>Nome</b>" in unavailable_screen.text
     assert "⚠️ Nome indisponível. Digite outro nome no chat." in unavailable_screen.text
@@ -91,10 +94,8 @@ def test_name_errors_and_confirmation_exact_copy():
     confirm = render(replace(base, step="confirm"))
     assert "📜 <b>Revisar Personagem</b>" in confirm.text
     assert [[button.text for button in row] for row in confirm.keyboard.inline_keyboard] == [
-        ["✅ Confirmar Personagem"],
-        ["👤 Nome", "🎭 Gênero"],
-        ["🧿 Raça", "⚜️ Classe"],
-        ["↩️ Retornar"],
+        ["✅ Confirmar"],
+        ["↩️ Voltar"],
     ]
     assert "HP" not in confirm.text and "ATQ" not in confirm.text
 
@@ -113,7 +114,7 @@ def test_confirmation_uses_selected_race_passive_and_class(race, cls):
         )
     )
     assert (
-        "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."
+        "‼️ Gênero, Raça e Classe não poderão ser alterados após a confirmação."
         in screen.text
     )
     assert CLASS_CONTENT[cls]["name"] in screen.text

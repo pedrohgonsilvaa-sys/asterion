@@ -96,17 +96,23 @@ def render_campaign(
 ADVENTURE_ENTRY = "adv:hub"
 
 
+ADVENTURE_TEXT = (
+    "As Terras do Ocaso guardam caminhos que você ainda não percorreu. À medida que avança, "
+    "novas trilhas, lugares esquecidos e perigos ocultos podem surgir diante de você. Cada "
+    "caminho leva a uma nova parte da jornada."
+)
+
+
 def render_adventure() -> Screen:
-    """Submenu ⚔️ Aventura (decisão do autor 2026-11-26 §4): Refúgio, Desbravar, Caçadas
-    e Masmorras. Só navegação: abrir o submenu não move o personagem."""
-    from asterion.bot.ui_format import back, button, keyboard
+    """Submenu ⚔️ Aventura (fluxo de UI aprovado §1.5): Desbravar e Masmorras.
+    Só navegação: abrir o submenu não move o personagem."""
+    from asterion.bot.ui_format import back, blocks, button, keyboard, narrative
 
     return Screen(
-        "<b>⚔️ Aventura</b>",
+        blocks("<b>⚔️ Aventura</b>", narrative(ADVENTURE_TEXT)),
         "adventure",
         keyboard(
-            [button("🌘 Refúgio", "refuge:local"), button("⛰️ Desbravar", DESBRAVAR_ENTRY)],
-            [button("🐺 Caçadas", "tdo:hunt"), button("🗝️ Masmorras", "dungeon:known")],
+            [button("⛰️ Desbravar", DESBRAVAR_ENTRY), button("🗝️ Masmorras", "dungeon:known")],
             back("menu:back"),
         ),
         "HTML",
@@ -187,7 +193,7 @@ CLASS_EMOJI = {
     "oraculo": "🔮",
     "luminar": "☀️",
 }
-REFUGE_TITLE = "🌘 Refúgio do Ocaso"
+REFUGE_TITLE = "🌘 Terras do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
 DAILY_GIFT_BUTTON = "✨ Resgatar Dádiva Diária"
 DESBRAVAR_ENTRY = "tdo:explore"
@@ -206,40 +212,39 @@ REFUGE_MENU = (
 DESBRAVAR_TEXT = (
     "As Terras do Ocaso se estendem além das trilhas conhecidas. Estradas cobertas de "
     "cinza, campos de fuligem, bosques consumidos pelo fogo e antigas estruturas de pedra "
-    "guardam caminhos que ainda não revelaram tudo o que escondem. Entre rotas conhecidas e "
-    "passagens esquecidas, cada descoberta pode levar a um novo lugar, um encontro "
-    "inesperado ou uma ameaça à espreita."
+    "guardam caminhos que ainda não revelaram tudo o que escondem.\n\n"
+    "Entre rotas conhecidas e passagens esquecidas, cada descoberta pode levar a um novo "
+    "lugar, um encontro inesperado ou uma ameaça à espreita."
 )
 DESBRAVAR_LOCAL_PREFIX = "tdo:desb:"
-# Botão, rótulo do Local e chave de callback, na ordem fechada pelo autor.
+# Botão, rótulo do Local e chave de callback, na ordem fechada pelo autor (UI aprovada §1.6).
 DESBRAVAR_LOCALS = (
-    ("🔥 Estrada das Cinzas", "Estrada das Cinzas", "road"),
-    ("🌑 Charneca da Fuligem", "Charneca da Fuligem", "charneca"),
-    ("🌲 Bosque Calcinado", "Bosque Calcinado", "bosque"),
-    ("🏚️ Ruínas do Vigia", "Ruínas do Vigia", "ruinas"),
-    ("🕯️ Câmara do Poente", "Câmara do Poente", "camara"),
+    ("🔥 Estrada", "Estrada das Cinzas", "road"),
+    ("🌑 Charneca", "Charneca da Fuligem", "charneca"),
+    ("🌲 Bosque", "Bosque Calcinado", "bosque"),
+    ("🏚️ Ruínas", "Ruínas do Vigia", "ruinas"),
+    ("🕯️ Câmara", "Câmara do Poente", "camara"),
 )
 DESBRAVAR_LOCAL_BY_KEY = {key: label for _button, label, key in DESBRAVAR_LOCALS}
 
 
 def render_desbravar() -> Screen:
-    """Menu ⛰️ Desbravar: Masmorras, Refúgio do Ocaso e os Locais da Região."""
+    """Menu ⛰️ Desbravar (UI aprovada §1.6): Refúgio e os cinco Locais da Região."""
     from asterion.bot.ui_format import back, blocks, button, keyboard, narrative
 
     locals_ = [
         button(text, f"{DESBRAVAR_LOCAL_PREFIX}{key}") for text, _label, key in DESBRAVAR_LOCALS
     ]
     return Screen(
-        blocks("<b>⛰️ Desbravar</b>", narrative(DESBRAVAR_TEXT)),
+        blocks(
+            "<b>⛰️ Desbravar</b>",
+            *(narrative(part) for part in DESBRAVAR_TEXT.split("\n\n")),
+        ),
         REFUGE_IMAGE_KEY,
         keyboard(
-            [
-                button("🗝️ Masmorras", "dungeon:known"),
-                button("🌘 Refúgio do Ocaso", "refuge:local"),
-            ],
-            locals_[0:2],
-            locals_[2:4],
-            locals_[4:5],
+            [button("🌒 Refúgio", "refuge:local"), locals_[0]],
+            [locals_[1], locals_[2]],
+            [locals_[3], locals_[4]],
             back(ADVENTURE_ENTRY),
         ),
         "HTML",
@@ -330,7 +335,7 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
     ]
     header = [line for line in header if line]
     stats = [
-        f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))}/{number(int(view.max_hp))}')}",
+        f"❤️ <b>Vida</b> · {mono(f'{number(int(view.hp))}/{number(int(view.max_hp))}')}",
         bar(view.hp, view.max_hp, HP_FILL),
         f"⚡ <b>Vigor</b> · {mono(f'{view.vigor}/{view.max_vigor}')}",
         bar(view.vigor, view.max_vigor, VIGOR_FILL),

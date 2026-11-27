@@ -62,7 +62,7 @@ def test_header_is_the_default_identity_with_tag_legacy_and_title():
         selected_title="Aliado do Refúgio",
     ).text
     lines = text.split("\n\n")
-    assert lines[0] == "<b>🌘 Refúgio do Ocaso</b>"
+    assert lines[0] == "<b>🌘 Terras do Ocaso</b>"
     # Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão.
     # Decisão fechada do autor: identidade, Título monoespaçado, Patrono e Coroas.
     assert lines[1].split("\n") == [
@@ -107,7 +107,7 @@ def test_title_is_html_escaped():
 def test_status_block_is_compact_bold_and_monospaced():
     text = _screen().text
     assert (
-        "❤️ <b>HP</b> · <code>631/631</code>\n" + "🟥" * 10 + "\n"
+        "❤️ <b>Vida</b> · <code>631/631</code>\n" + "🟥" * 10 + "\n"
         "⚡ <b>Vigor</b> · <code>100/100</code>\n" + "🟨" * 10 + "\n"
         "✨ <b>XP</b> · <code>320/4.800</code>\n🟦"
     ) in text
@@ -312,7 +312,7 @@ async def test_real_flow_open_gift_claim_and_return_to_refuge(database):
     )
     assert "Resgatar" not in labels()
     await dispatcher.feed_raw_update(bot, callback_update("menu:back", update_id=5, actor=actor))
-    assert "🌘 Refúgio do Ocaso" in _last_screen(bot).text
+    assert "🌘 Terras do Ocaso" in _last_screen(bot).text
     assert "✨ Resgatar Dádiva Diária" not in labels()
     assert labels()[0] == "⚔️ Aventura"
     await bot.session.close()
