@@ -18,3 +18,15 @@ def art_choices_text(view, doctrine, slot: int) -> str:
     return "\n".join(
         plain(render_art_choices(view, doctrine, slot, page).text) for page in range(pages)
     )
+
+
+def doctrine_talent_choices(view, doctrine) -> str:
+    """Talentos que a Doutrina pode escolher (✨) ou já escolheu (✅), nas duas páginas."""
+    from asterion.bot.doctrines_ui import TALENT_LOCKED, render_talent_page
+
+    lines = []
+    for page in (0, 1):
+        for line in plain(render_talent_page(view, doctrine, page).text).splitlines():
+            if line[:1] in {"✨", "✅"} and not line.startswith(TALENT_LOCKED):
+                lines.append(line)
+    return "\n".join(lines)

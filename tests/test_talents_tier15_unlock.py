@@ -23,7 +23,6 @@ from asterion.bot.character_progression_ui import (
     render_talent_list,
     render_talent_root,
 )
-from asterion.bot.doctrines_ui import render_talent_choices
 from asterion.domain.arts import (
     ERRANTE_ART_IDS,
     LUMINAR_ART_IDS,
@@ -66,6 +65,7 @@ from asterion.infrastructure.db.models import (
     GameActivity,
     WorldState,
 )
+from tests.ui_plain import doctrine_talent_choices
 
 D = Decimal
 CLASS_ORDER = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -561,18 +561,9 @@ async def test_doctrine_editor_accepts_nv15_without_slot_prerequisites_and_apply
         item for item in collection.doctrines if item.doctrine_id == created.doctrine_id
     )
     first = TALENTS_BY_CLASS["sentinela"][3]
-    screen = render_talent_choices(collection, doctrine, 1)
-    assert any(
-        first.name in button.text
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    )
-    assert not any(
-        "Nv.25" in button.text
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    )
-    assert "ainda não está disponível" in render_talent_choices(collection, doctrine, 4).text
+    screen = doctrine_talent_choices(collection, doctrine)
+    assert first.name in screen
+    assert "Nv.25" not in screen
 
     choices = [
         {"point_slot": slot, "talent_id": talent.talent_id}

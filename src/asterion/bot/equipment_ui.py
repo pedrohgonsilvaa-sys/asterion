@@ -140,6 +140,25 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
     attributes = _attribute_lines(item)
     if attributes:
         parts.append("\n".join(attributes))
+    installed = [
+        _field(
+            "🔷",
+            str(rune.get("name") or rune.get("family") or "Runa"),
+            f"Grau {rune.get('grade', 'I')} · {rune.get('potency', '')}".rstrip(" ·"),
+        )
+        for rune in item.runes
+    ]
+    if item.enchantment:
+        enchantment = item.enchantment
+        installed.append(
+            _field(
+                "💫",
+                str(enchantment.get("name") or enchantment.get("family") or "Encantamento"),
+                str(enchantment.get("potency", "")),
+            )
+        )
+    if installed:
+        parts.append("\n".join(installed))
     parts.append(
         "\n".join(
             (

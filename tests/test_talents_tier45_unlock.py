@@ -19,7 +19,6 @@ from asterion.application.talents import (
     TalentService,
 )
 from asterion.bot.character_progression_ui import render_talent_detail
-from asterion.bot.doctrines_ui import render_talent_choices
 from asterion.domain.arts import (
     CONJURADOR_ART_IDS,
     ERRANTE_ART_IDS,
@@ -52,6 +51,7 @@ from asterion.infrastructure.db.models import (
     CharacterTalentChoice,
     WorldState,
 )
+from tests.ui_plain import doctrine_talent_choices
 
 D = Decimal
 CLASS_ORDER = ("sentinela", "errante", "vigia", "tecelao", "oraculo", "luminar")
@@ -393,13 +393,9 @@ async def test_nv45_doctrine_and_service_reject_nv55_below_required_level(databa
     view = await doctrines.view(actor)
     assert view is not None
     doctrine = next(item for item in view.doctrines if item.doctrine_id == created.doctrine_id)
-    picker = render_talent_choices(view, doctrine, 1)
+    picker = doctrine_talent_choices(view, doctrine)
     assert all(
-        any(
-            definition.name in button.text
-            for row in picker.keyboard.inline_keyboard
-            for button in row
-        )
+        definition.name in picker
         for definition in TALENTS_BY_CLASS["luminar"]
         if definition.level == 45
     )

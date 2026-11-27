@@ -141,10 +141,10 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     screen = await _click(dispatcher, bot, f"eq:v:{item_id.hex}", actor=actor, update_id=index)
     index += 1
     assert "Elmo de Fuligem" in screen.text
-    assert "Runas" in [button.text for row in screen.reply_markup.inline_keyboard for button in row]
+    assert "🔮 Runas" in [button.text for row in screen.reply_markup.inline_keyboard for button in row]
 
     screen = await _click(
-        dispatcher, bot, _button(screen, "Aprimorar").callback_data, actor=actor,
+        dispatcher, bot, _button(screen, "🔨 Aprimorar").callback_data, actor=actor,
         update_id=index,
     )
     index += 1
@@ -158,7 +158,7 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     assert "+1" in screen.text
 
     screen = await _click(
-        dispatcher, bot, _button(screen, "Runas").callback_data, actor=actor,
+        dispatcher, bot, _button(screen, "🔮 Runas").callback_data, actor=actor,
         update_id=index,
     )
     index += 1
@@ -192,7 +192,7 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     assert "Persistência" in screen.text
 
     screen = await _click(
-        dispatcher, bot, _button(screen, "Encantamento").callback_data,
+        dispatcher, bot, _button(screen, "✨ Encantamento").callback_data,
         actor=actor, update_id=index,
     )
     index += 1
@@ -218,12 +218,14 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     )
     index += 1
     screen = await _click(
-        dispatcher, bot, _button(screen, "Favoritar").callback_data,
+        dispatcher, bot, _button(screen, "⭐ Favoritar").callback_data,
         actor=actor, update_id=index,
     )
-    assert "⭐ Favorito" in screen.text
+    assert "⭐ Desfavoritar" in [
+        button.text for row in screen.reply_markup.inline_keyboard for button in row
+    ]
     assert not any(
-        button.text == "Desmontar"
+        button.text == "🔧 Desmontar"
         for row in screen.reply_markup.inline_keyboard
         for button in row
     )
