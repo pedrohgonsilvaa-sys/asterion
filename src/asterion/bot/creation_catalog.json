@@ -1,10 +1,10 @@
 {
   "screens": {
-    "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Envie no chat o nome desejado.",
-    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ Envie no chat o nome desejado.",
-    "name_unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. Escolha como seu personagem será conhecido em Asterion._\n\n⚠️ Nome indisponível. Digite outro nome no chat.",
-    "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. Escolha como seu personagem se apresenta em Asterion._",
-    "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. Sua origem acompanhará permanentemente este personagem e influenciará, de forma sutil, a maneira como ele enfrenta os perigos do mundo._",
+    "name": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ **Envie no chat o nome desejado.**",
+    "format": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ Nome inválido. Envie outro nome no chat.\n\n⚠️ **Envie no chat o nome desejado.**",
+    "name_unavailable": "👤 **Nome**\n\n_Todo caminho começa com um nome. É por ele que um personagem passa a ser conhecido em Asterion._\n\n⚠️ Nome indisponível. Digite outro nome no chat.",
+    "gender": "🎭 **Gênero**\n\n_Existe o rosto que o mundo vai reconhecer. O gênero define como um personagem se apresenta em Asterion._",
+    "race": "🧿 **Raça**\n\n_Povos distintos sobreviveram às marcas deixadas sobre Asterion. A origem acompanha permanentemente cada personagem e influencia, de forma sutil, a maneira como enfrenta os perigos do mundo._",
     "class": "⚜️ **Classe**\n\n_A Classe define as bases do estilo de combate e os Caminhos que poderão ser despertados mais adiante. A escolha é permanente e acompanhará o personagem._",
     "confirm": "📜 **Revisar Personagem**\n\n_Nome, origem e vocação estão definidos. Os dados do personagem podem ser conferidos antes do início da jornada._",
     "confirm_warning": "⚠️ Gênero, Raça e Classe não poderão ser alterados após a criação do personagem."

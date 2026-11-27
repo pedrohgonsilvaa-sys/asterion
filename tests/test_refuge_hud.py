@@ -66,9 +66,8 @@ def test_header_is_the_default_identity_with_tag_legacy_and_title():
     # Contrato Mestre de Telas UI v1.0.0 §4: identidade padrão.
     # Decisão fechada do autor: identidade, Título monoespaçado, Patrono e Coroas.
     assert lines[1].split("\n") == [
-        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1 · Legado I</code>",
+        "🏹 <b>[CIN] Oppan</b> · <code>Nv. 1</code> · <code>Legado I</code>",
         "🎖️ <code>Aliado do Refúgio</code>",
-        "👑 <b>Ainda não é um Patrono de Asterion.</b>",
         "🪙 <b>Coroas</b> · <code>1.500</code>",
     ]
     assert "Atirador" not in text and "Caminho" not in text and "Vigia" not in text
@@ -127,7 +126,7 @@ def test_hud_has_only_contract_blocks():
 
 
 def test_patron_state_follows_the_account_status():
-    assert "👑 <b>Ainda não é um Patrono de Asterion.</b>" in _screen(patron_active=False).text
+    assert "Patrono" not in _screen(patron_active=False).text
     active = _screen(patron_active=True).text
     assert "Ainda não é um Patrono" not in active
     assert "👑 <b>Patrono de Asterion</b>" in active

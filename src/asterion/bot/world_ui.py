@@ -252,7 +252,6 @@ def roman(value: int) -> str:
     return _roman(value)
 
 
-PATRON_INACTIVE_LINE = "👑 <b>Ainda não é um Patrono de Asterion.</b>"
 FLAGELO_FILL = "🟪"
 # Decisão do autor 2026-11-26 §5.2: emoji exclusivo de cada Flagelo.
 FLAGELO_EMOJI = {
@@ -265,10 +264,13 @@ FLAGELO_EMOJI = {
 }
 
 
-def patron_line(active: bool, until=None, *, now=None) -> str:
-    """``👑 **Patrono de Asterion** · `X Dias` `` (dias restantes) ou o estado inativo."""
+def patron_line(active: bool, until=None, *, now=None) -> str | None:
+    """``👑 **Patrono de Asterion** · `X Dias` `` (dias restantes); ``None`` sem Patrono.
+
+    Decisão do autor 2026-11-27: sem Patrono ativo, a HUD não mostra linha nenhuma.
+    """
     if not active:
-        return PATRON_INACTIVE_LINE
+        return None
     if until is None:
         return "👑 <b>Patrono de Asterion</b>"
     from datetime import UTC, datetime
@@ -326,6 +328,7 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
         patron_line(view.patron_active, view.patron_until),
         f"🪙 <b>Coroas</b> · {mono(number(view.crowns))}",
     ]
+    header = [line for line in header if line]
     stats = [
         f"❤️ <b>HP</b> · {mono(f'{number(int(view.hp))}/{number(int(view.max_hp))}')}",
         bar(view.hp, view.max_hp, HP_FILL),

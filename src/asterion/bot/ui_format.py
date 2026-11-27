@@ -133,18 +133,19 @@ def identity(
     guild_tag: str | None = None,
     title: str | None = None,
 ) -> str:
-    """``🗡️ **[RSN] Oheen** · `Nv. 1 · Legado I` `` e ``🎖️ `Caminhante das Cinzas` ``.
+    """``🗡️ **[RSN] Oheen** · `Nv. 1` · `Legado I` `` e ``🎖️ `Caminhante das Cinzas` ``.
 
     TAG da Guilda e nome em negrito; sem Guilda, a TAG some; sem Legado, ``· Legado I``
     some; o Título fica em monoespaçado e, sem Título, vale o Título inicial persistido.
     """
     tag = f"[{guild_tag}] " if guild_tag else ""
-    level_text = f"Nv. {level}"
+    # Correções oficiais 2026-11-26 §4.1: nível e Legado em monos separados.
+    level_text = mono(f"Nv. {level}")
     if legacy_level > 0:
-        level_text += f" · Legado {roman(legacy_level)}"
+        level_text += f" · {mono(f'Legado {roman(legacy_level)}')}"
     return "\n".join(
         (
-            f"{emoji} <b>{escape(tag + name)}</b> · {mono(level_text)}",
+            f"{emoji} <b>{escape(tag + name)}</b> · {level_text}",
             f"🎖️ {mono(title or DEFAULT_TITLE)}",
         )
     )

@@ -39,12 +39,14 @@ def battle(cls="sentinela", race="velado", combat_id=COMBAT_ID):
 @pytest.mark.parametrize("basics", [("attack", "defend"), ("defend", "attack")])
 def test_all_thirty_combinations_complete_both_tutorial_orders(cls, race, basics):
     state = battle(cls, race)
-    assert set(allowed_actions(state)) == {"attack", "defend"}
+    # Decisão do autor 2026-11-27: sem trava de tutorial, as três ações valem desde o turno 1.
+    assert set(allowed_actions(state)) == {"attack", "defend", "art"}
     original = deepcopy(state)
-    for index, action in enumerate(basics):
+    for action in basics:
         state = act(state, action)
         assert state.events[-1].action == ("bite" if action == "attack" else "charge")
-        assert allowed_actions(state) == ((basics[1],) if index == 0 else ("art",))
+        assert "art" in allowed_actions(state)
+        assert ("defend" in allowed_actions(state)) == (action != "defend")
         assert state.fighters["player"].hp > 0
     state = act(state, "art")
     if not state.result:
@@ -235,8 +237,13 @@ def test_snapshot_roundtrip_reproduces_actions_and_criticals():
 
 def test_forged_actions_do_not_advance_rng_hp_version_or_tutorial():
     state = battle()
-    for action in ("art", "bite", "charge", "reward", "attack:99999", "", "defend:2"):
+    for action in ("bite", "charge", "reward", "attack:99999", "", "defend:2"):
         assert act(state, action) is state
+
+
+def test_tutorial_art_is_available_on_the_first_turn():
+    state = battle()
+    assert act(state, "art") is not state
 
 
 def test_current_ruleset_uses_total_crit_percentage_points():
