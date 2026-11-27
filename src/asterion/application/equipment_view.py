@@ -79,6 +79,7 @@ class EquipmentItemView:
     weapon_proficiency_label: str | None = None
     armor_class_label: str | None = None
     region_label: str | None = None
+    special_abilities: tuple[dict, ...] = ()
 
     @property
     def equipped(self) -> bool:
@@ -383,6 +384,11 @@ class EquipmentViewService:
             weapon_proficiency_label=weapon_proficiency_label(weapon),
             armor_class_label=ARMOR_CLASS_LABELS.get(snapshot.armor_class or ""),
             region_label=region_label(payload.get("region_id")),
+            special_abilities=tuple(
+                entry
+                for entry in (payload.get("special_abilities") or ())
+                if isinstance(entry, dict)
+            ),
         )
 
     def _validate_configuration(self, items: dict[EquipmentSlot, EquipmentItemView]) -> None:

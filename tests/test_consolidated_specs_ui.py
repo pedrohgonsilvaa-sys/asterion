@@ -333,8 +333,8 @@ def test_material_detail_shows_grade_quantity_type_and_bind():
     from asterion.bot.inventory_ui import render_inventory
 
     materials = render_inventory(listing)
-    assert "💧 <b>Resíduo do Ocaso</b> · <code>1</code>" in materials.text
-    assert _labels(materials) == [["💧 Resíduo"], ["↩️ Retornar"]]
+    assert "#1 🧱 <b>Resíduo do Ocaso</b> · <code>×1</code>\n✨ <code>Grau I</code>" in materials.text  # noqa: E501
+    assert _labels(materials)[0] == ["1️⃣"]
 
 
 # --- Artes (Parte I §7–§9) ---------------------------------------------------------

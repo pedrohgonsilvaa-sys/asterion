@@ -141,13 +141,13 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     screen = await _click(dispatcher, bot, f"eq:v:{item_id.hex}", actor=actor, update_id=index)
     index += 1
     assert "Elmo de Fuligem" in screen.text
+    # UI aprovada: o detalhe não expõe ações da Forja; os callbacks do domínio continuam
+    # funcionando e são acionados aqui diretamente.
     labels = [button.text for row in screen.reply_markup.inline_keyboard for button in row]
-    assert "🔮 Runas" in labels
+    assert not {"🔮 Runas", "✨ Encantamento", "🔨 Aprimorar", "🔧 Desmontar"} & set(labels)
+    token = item_id.hex
 
-    screen = await _click(
-        dispatcher, bot, _button(screen, "🔨 Aprimorar").callback_data, actor=actor,
-        update_id=index,
-    )
+    screen = await _click(dispatcher, bot, f"em:h:{token}", actor=actor, update_id=index)
     index += 1
     assert "🔼 Aprimoramento" in screen.text
     enhance = _button(screen, "Aprimorar").callback_data
@@ -158,10 +158,7 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     index += 1
     assert "+1" in screen.text
 
-    screen = await _click(
-        dispatcher, bot, _button(screen, "🔮 Runas").callback_data, actor=actor,
-        update_id=index,
-    )
+    screen = await _click(dispatcher, bot, f"em:r:{token}", actor=actor, update_id=index)
     index += 1
     assert "Persistência" in screen.text
     # A new, earlier-sorting stack must not retarget the old button by index.
@@ -192,10 +189,7 @@ async def test_telegram_equipment_modification_rejects_stale_and_preserves_item(
     index += 1
     assert "Persistência" in screen.text
 
-    screen = await _click(
-        dispatcher, bot, _button(screen, "✨ Encantamento").callback_data,
-        actor=actor, update_id=index,
-    )
+    screen = await _click(dispatcher, bot, f"em:e:{token}", actor=actor, update_id=index)
     index += 1
     assert "Receitas Disponíveis" in screen.text
     assert _button(screen, "1").callback_data.startswith("em:ep:")

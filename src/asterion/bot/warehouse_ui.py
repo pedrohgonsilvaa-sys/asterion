@@ -6,22 +6,22 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import origin_label
-from asterion.application.warehouse import WarehouseEntry, WarehouseView
+from asterion.application.warehouse import WarehouseView
 from asterion.bot.creation_ui import Screen
-from asterion.bot.inventory_ui import (
-    SLOT_LABEL,
-    page_buttons,
-    page_line,
-    page_slice,
-    rarity_label,
-)
-from asterion.domain.consumables import grade_label
+from asterion.bot.inventory_ui import _field, numbered_buttons, page_line, page_slice
+from asterion.bot.item_lines import list_item
+from asterion.bot.ui_format import numeric_rows, page_nav
 
 QUANTITY_STEPS = (100, 10, 1)
 # Short codes keep quantity callbacks inside Telegram's 64-byte limit.
 DIRECTION_CODE = {"deposit": "d", "withdraw": "w"}
 KIND_CODE = {"material": "m", "consumable": "c", "rune": "r"}
 
+WAREHOUSE_TITLE = "🗄️ Armazém"
+WAREHOUSE_TEXT = (
+    "Itens armazenados permanecem guardados separadamente do inventário e podem ser "
+    "retirados quando necessário."
+)
 UNAVAILABLE_REASON = {"EQUIPPED": "Equipado"}
 SOURCE_TITLE = {
     "equipment": "Equipamentos disponíveis para guardar",
@@ -148,27 +148,55 @@ def _render_operation(view: WarehouseView) -> Screen:
 def _render_sources(view: WarehouseView, page: int) -> Screen:
     title = SOURCE_TITLE.get(view.item_kind or "", "Itens disponíveis para guardar")
     page, pages, start, entries = page_slice(view.entries, page)
-    lines = [f"🗄️ {title}", "", *_capacity_lines(view)]
-    lines.extend(page_line(page, pages))
-    lines.append("")
-    buttons = []
-    for index, entry in enumerate(entries, start=start + 1):
-        lines.append(_entry_line(index, entry))
+    listing = []
+    callbacks = []
+    for position, entry in enumerate(entries, start=1):
+        block = list_item(position, entry, entry.id)
         if not entry.eligible:
             reason = UNAVAILABLE_REASON.get(entry.reason or "", "verificação necessária")
-            lines.append(f"Indisponível · {reason}")
-        elif entry.id:
-            buttons.append(
-                InlineKeyboardButton(
-                    text=f"Guardar {index}",
-                    callback_data=f"warehouse:deposit:{entry.kind}:{entry.id.replace('-', '')}",
-                )
-            )
-    rows = [buttons[offset : offset + 2] for offset in range(0, len(buttons), 2)]
-    rows.extend(page_buttons(page, pages, f"warehouse:inventory:{view.item_kind}"))
-    rows.append([InlineKeyboardButton(text="← Armazém", callback_data="warehouse:root")])
+            block += f"\n🚫 <code>{escape(reason)}</code>"
+            callbacks.append(f"warehouse:inventory:{view.item_kind}")
+        else:
+            callbacks.append(f"warehouse:deposit:{entry.kind}:{entry.id.replace('-', '')}")
+        listing.append(block)
+    header = "\n".join(
+        (
+            _field("🗳️", "Espaço", f"{view.inventory_used}/{view.inventory_capacity}"),
+            *page_line(page, pages),
+        )
+    )
+    rows = numeric_rows(numbered_buttons(callbacks))
+    rows.append(page_nav(page, pages, lambda t: f"warehouse:inventory:{view.item_kind}:{t}"))
+    rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="warehouse:store")])
     return Screen(
-        "\n".join(lines),
+        "\n\n".join(
+            (
+                f"<b>🗄️ {escape(title)}</b>",
+                header,
+                "\n\n".join(listing) or "<i>Nenhum item disponível.</i>",
+            )
+        ),
+        "warehouse",
+        InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
+        parse_mode="HTML",
+    )
+
+
+def render_warehouse_store_menu() -> Screen:
+    """Escolha do tipo de item a guardar; preserva a operação real de depósito."""
+    rows = [
+        [
+            InlineKeyboardButton(text="🛡️ Equipamentos", callback_data="warehouse:inventory:equipment"),  # noqa: E501
+            InlineKeyboardButton(text="🧪 Consumíveis", callback_data="warehouse:inventory:consumable"),  # noqa: E501
+        ],
+        [
+            InlineKeyboardButton(text="🧱 Materiais", callback_data="warehouse:inventory:material"),
+            InlineKeyboardButton(text="🔷 Runas", callback_data="warehouse:inventory:rune"),
+        ],
+        [InlineKeyboardButton(text="↩️ Retornar", callback_data="warehouse:root")],
+    ]
+    return Screen(
+        "<b>🗄️ Armazém</b>\n\n<i>Escolha o que guardar a partir do inventário.</i>",
         "warehouse",
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
@@ -184,55 +212,38 @@ def _back_row(back_to_refuge: bool) -> list[InlineKeyboardButton]:
 
 def _render_root(view: WarehouseView, page: int, back_to_refuge: bool) -> Screen:
     # Especificação consolidada 2026-11-26 §4: o Armazém não exige Braseiro permanente.
-    lines = ["🗄️ Armazém", ""]
     page, pages, start, entries = page_slice(view.entries, page)
-    lines.extend(_capacity_lines(view))
-    lines.extend(page_line(page, pages))
-    lines.append("")
-    if entries:
-        lines.extend(
-            _entry_line(index, entry) for index, entry in enumerate(entries, start=start + 1)
+    listing = (
+        "\n\n".join(
+            list_item(position, entry, entry.id) for position, entry in enumerate(entries, start=1)
         )
-    else:
-        lines.append("O Armazém está vazio.")
-    buttons = [
-        InlineKeyboardButton(
-            text=f"Retirar {index}",
-            callback_data=f"warehouse:withdraw:{entry.kind}:{entry.id.replace('-', '')}",
-        )
-        for index, entry in enumerate(entries, start=start + 1)
-    ]
-    rows = [buttons[offset : offset + 2] for offset in range(0, len(buttons), 2)]
-    rows.extend(page_buttons(page, pages, "warehouse:page"))
-    rows.extend(
-        [
-            [
-                InlineKeyboardButton(
-                    text="Guardar equipamento",
-                    callback_data="warehouse:inventory:equipment",
-                ),
-                InlineKeyboardButton(
-                    text="Guardar materiais",
-                    callback_data="warehouse:inventory:material",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Guardar consumíveis",
-                    callback_data="warehouse:inventory:consumable",
-                ),
-                InlineKeyboardButton(
-                    text="Guardar runas",
-                    callback_data="warehouse:inventory:rune",
-                ),
-            ],
-            _back_row(back_to_refuge),
-        ]
+        if entries
+        else "<i>O Armazém está vazio.</i>"
     )
+    header = "\n".join(
+        (
+            _field("🗳️", "Espaço", f"{view.warehouse_used}/{view.warehouse_capacity}"),
+            *page_line(page, pages),
+        )
+    )
+    callbacks = [
+        f"warehouse:withdraw:{entry.kind}:{entry.id.replace('-', '')}" for entry in entries
+    ]
+    rows = numeric_rows(numbered_buttons(callbacks))
+    rows.append([InlineKeyboardButton(text="📥 Guardar", callback_data="warehouse:store")])
+    rows.append(page_nav(page, pages, lambda target: f"warehouse:page:{target}"))
+    rows.append(_back_row(back_to_refuge))
     return Screen(
-        "\n".join(lines),
+        "\n\n".join(
+            (
+                f"<b>{WAREHOUSE_TITLE}</b>",
+                f"<i>{escape(WAREHOUSE_TEXT)}</i>",
+                header,
+                listing,
+            )
+        ),
         "warehouse",
-        InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
 
@@ -242,32 +253,3 @@ def _capacity_lines(view: WarehouseView) -> list[str]:
         f"Inventário · {view.inventory_used}/{view.inventory_capacity}",
         f"Armazém · {view.warehouse_used}/{view.warehouse_capacity}",
     ]
-
-
-def _entry_line(index: int, entry: WarehouseEntry) -> str:
-    details = []
-    if entry.rarity:
-        details.append(rarity_label(entry))
-    if entry.slot:
-        details.append(escape(SLOT_LABEL.get(entry.slot, entry.slot)))
-    if entry.item_level is not None:
-        details.append(f"Nv.{entry.item_level}")
-    if entry.grade is not None:
-        grade = grade_label(entry.grade) if entry.kind == "consumable" else entry.grade
-        details.append(f"Grau {grade}")
-    if entry.bound:
-        details.append("🔗 Vinculado")
-    if entry.kind == "equipment":
-        payload = entry.payload or {}
-        details.append(f"+{int(payload.get('enhancement', 0))}")
-        if payload.get("favorite"):
-            details.append("⭐ Favorito")
-        if payload.get("locked"):
-            details.append("🔒 Protegido")
-        runes = payload.get("runes")
-        if isinstance(runes, (list, tuple)) and runes:
-            details.append(f"🔷 Runas {len(runes)}")
-    suffix = f" · {' · '.join(details)}" if details else ""
-    quantity = "" if entry.kind == "equipment" else f" · {entry.quantity}"
-    icon = {"consumable": "🧪 ", "rune": "🔷 "}.get(entry.kind, "")
-    return f"{index}. {icon}{escape(entry.title)}{quantity}{suffix}"

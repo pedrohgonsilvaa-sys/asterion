@@ -12,9 +12,20 @@ from asterion.application.equipment_view import (
     EquipmentRootView,
 )
 from asterion.bot.creation_ui import Screen
-from asterion.bot.ui_format import roman
+from asterion.bot.item_lines import (
+    component_stat,
+    equipment_name,
+    rarity_emoji,
+    stat_line,
+    stat_parts,
+)
+from asterion.bot.ui_format import keycap, numeric_rows, page_bounds, page_nav, pairs, roman
 from asterion.domain.equipment import EquipmentSlot
-from asterion.domain.equipment_modifications import equipment_grade
+from asterion.domain.equipment_modifications import (
+    ENCHANTMENT_FAMILIES,
+    RUNE_FAMILIES,
+    equipment_grade,
+)
 
 SLOT_PRESENTATION = (
     (EquipmentSlot.PRINCIPAL, "Arma Principal", "🗡️", "p"),
@@ -60,16 +71,16 @@ ATTRIBUTE_PRESENTATION = (
 )
 
 
-# Especificação consolidada 2026-11-26, Parte I §1–§2.
+# UI aprovada: Personagem → Equipamentos (2 páginas de 4), Detalhe e Seleção.
 ROOT_TITLE = "🛡️ Equipamentos"
 ROOT_TEXT = (
-    "Os equipamentos usados pelo personagem ocupam posições específicas e podem ser "
-    "substituídos conforme a jornada avança."
+    "Aqui ficam os equipamentos que acompanham seu personagem. Cada peça ocupa uma "
+    "posição específica e contribui com seus próprios atributos para a jornada."
 )
 # (posição, rótulo na tela, emoji)
 ROOT_SLOTS = (
-    (EquipmentSlot.PRINCIPAL, "Principal", "⚔️"),
-    (EquipmentSlot.SECUNDARIA, "Secundária", "⚔️"),
+    (EquipmentSlot.PRINCIPAL, "Principal", "✋"),
+    (EquipmentSlot.SECUNDARIA, "Secundária", "🤚"),
     (EquipmentSlot.CABECA, "Cabeça", "🪖"),
     (EquipmentSlot.TORSO, "Torso", "🥋"),
     (EquipmentSlot.MAOS, "Mãos", "🧤"),
@@ -78,7 +89,15 @@ ROOT_SLOTS = (
     (EquipmentSlot.ARTEFATO, "Artefato", "🔮"),
 )
 ROOT_SLOT_EMOJI = {slot: emoji for slot, _, emoji in ROOT_SLOTS}
+ROOT_PAGE_SIZE = 4
+ROOT_PAGES = 2
+CANDIDATES_PER_PAGE = 6
 HANDS_LABELS = {"1 mão": "1 Mão", "2 mãos": "2 Mãos"}
+EMPTY_CANDIDATES_TEXT = (
+    "Nenhum equipamento compatível está disponível para esta posição. Obtenha um "
+    "equipamento compatível para poder equipá-lo."
+)
+CANDIDATES_TEXT = "Neste espaço, escolha entre os equipamentos compatíveis disponíveis para equipar."  # noqa: E501
 
 
 def _field(emoji: str, label: str, value: str) -> str:
@@ -86,38 +105,46 @@ def _field(emoji: str, label: str, value: str) -> str:
 
 
 def _item_name(item: EquipmentItemView) -> str:
-    return item.name + (f" +{item.enhancement}" if item.enhancement else "")
+    return equipment_name(item.name, item.enhancement)
 
 
-def render_equipment_root(view: EquipmentRootView) -> Screen:
-    lines = []
+def render_equipment_root(view: EquipmentRootView, page: int = 0) -> Screen:
+    """Quatro posições por página, em duas páginas, com os atributos de cada peça."""
+    page = min(max(page, 0), ROOT_PAGES - 1)
+    start = page * ROOT_PAGE_SIZE
+    blocks = []
     buttons = []
-    for index, slot_view in enumerate(view.slots):
+    for index in range(start, min(start + ROOT_PAGE_SIZE, len(view.slots))):
+        slot_view = view.slots[index]
         slot, label, emoji = ROOT_SLOTS[index]
-        code = SLOT_CODES[slot]
+        head = f"{emoji} <b>{escape(label)}</b> · "
         if slot_view.blocked_by_two_handed:
-            value = "Bloqueada"
-        elif slot_view.item is None:
-            value = "Vazio"
-        else:
-            value = _item_name(slot_view.item)
-        lines.append(_field(emoji, label, value))
-        if slot_view.blocked_by_two_handed:
+            blocks.append(head + "Bloqueada")
             continue
+        item = slot_view.item
+        if item is None:
+            blocks.append(head + "Vazio")
+        else:
+            favorite = "⭐" if item.favorite else ""
+            lines = [f"{head}{favorite}{rarity_emoji(item.rarity)} {escape(_item_name(item))}"]
+            if attributes := stat_line(item.contribution):
+                lines.append(attributes)
+            blocks.append("\n".join(lines))
         buttons.append(
             InlineKeyboardButton(
                 text=f"{emoji} {label}",
-                callback_data=f"eq:s:{code}:{view.combat_configuration_version}",
+                callback_data=f"eq:s:{SLOT_CODES[slot]}:{view.combat_configuration_version}",
             )
         )
-    rows = [buttons[offset : offset + 2] for offset in range(0, len(buttons), 2)]
+    rows = pairs(buttons)
+    rows.append(page_nav(page, ROOT_PAGES, lambda target: f"eq:r:{target}" if target else "eq:r"))
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="character:root")])
     return Screen(
         "\n\n".join(
-            (f"<b>{escape(ROOT_TITLE)}</b>", f"<i>{escape(ROOT_TEXT)}</i>", "\n".join(lines))
+            (f"<b>{escape(ROOT_TITLE)}</b>", f"<i>{escape(ROOT_TEXT)}</i>", "\n\n".join(blocks))
         ),
         "equipment",
-        InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
 
@@ -128,112 +155,91 @@ def _proficiency(item: EquipmentItemView) -> str | None:
     return item.armor_class_label
 
 
+def _component_lines(
+    emoji: str, label: str, name: str, attribute: str | None, potency: str | None
+) -> str:
+    lines = [_field(emoji, label, name)]
+    if attribute and potency and (effect := component_stat(attribute, potency)):
+        lines.append(effect)
+    return "\n".join(lines)
+
+
 def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Screen:
-    """Detalhe do Equipamento (§2): sem Posição, Forma, Nível do Item nem
-    Compatibilidade de Artes."""
+    """Detalhe aprovado: ações somente Trocar, Desequipar, Favoritar e Retornar.
+
+    Runas, Encantamento, Aprimoramento e Desmontagem pertencem ao fluxo da Forja e
+    não são ações desta tela; Runa e Encantamento aparecem apenas como estado.
+    """
     item = view.item
-    icon = ROOT_SLOT_EMOJI[item.slot]
+    icon = "🗡️" if item.slot in {EquipmentSlot.PRINCIPAL, EquipmentSlot.SECUNDARIA} else (
+        ROOT_SLOT_EMOJI[item.slot]
+    )
     rarity = _rarity_label(item.rarity)
-    parts = [f"{icon} <b>{escape(_item_name(item))}</b>"]
+    parts = [f"<b>{icon} {escape(_item_name(item))}</b>"]
     if item.lore:
         parts.append(f"<i>{escape(item.lore)}</i>")
-    attributes = _attribute_lines(item)
-    if attributes:
-        parts.append("\n".join(attributes))
-    installed = [
-        _field(
-            "🔷",
-            str(rune.get("name") or rune.get("family") or "Runa"),
-            f"Grau {rune.get('grade', 'I')} · {rune.get('potency', '')}".rstrip(" ·"),
-        )
-        for rune in item.runes
+    facts = [
+        _field(attr_icon, label, value)
+        for attr_icon, label, value in stat_parts(item.contribution, attack_icon="🗡️")
     ]
-    if item.enchantment:
-        enchantment = item.enchantment
-        installed.append(
-            _field(
-                "💫",
-                str(enchantment.get("name") or enchantment.get("family") or "Encantamento"),
-                str(enchantment.get("potency", "")),
-            )
-        )
-    if installed:
-        parts.append("\n".join(installed))
-    parts.append(
-        "\n".join(
-            (
-                _field("✨", "Grau", roman(equipment_grade(item.item_level))),
-                _field(RARITY_ICON.get(rarity, "⚪"), "Raridade", rarity),
-            )
-        )
-    )
-    details = []
+    facts.append(_field("✨", "Grau", roman(equipment_grade(item.item_level))))
+    facts.append(_field(RARITY_ICON.get(rarity, "⚪"), "Raridade", rarity))
     if item.weapon_handedness_label:
         hands = HANDS_LABELS.get(item.weapon_handedness_label, item.weapon_handedness_label)
-        details.append(_field("👐", "Mãos", hands))
+        facts.append(_field("✋", "Empunhadura", hands))
     if proficiency := _proficiency(item):
-        details.append(_field("🛡️", "Proficiência", proficiency))
+        facts.append(_field("🎓", "Proficiência", proficiency))
     if item.bound:
-        details.append(_field("🔗", "Vínculo", "Vinculado"))
-    if details:
-        parts.append("\n".join(details))
+        facts.append(_field("🔗", "Vínculo", "Vinculado"))
+    parts.append("\n".join(facts))
+    for rune in item.runes:
+        family = str(rune.get("family") or "")
+        attribute = RUNE_FAMILIES.get(family, (None, None))[0]
+        name = str(rune.get("name") or RUNE_FAMILIES.get(family, (None, family or "Runa"))[1])
+        parts.append(_component_lines("🔷", "Runa", name, attribute, rune.get("potency")))
+    if item.enchantment:
+        enchantment = item.enchantment
+        family = str(enchantment.get("family") or "")
+        name = str(enchantment.get("name") or family or "Encantamento")
+        parts.append(
+            _component_lines(
+                "💫", "Encantamento", name, ENCHANTMENT_FAMILIES.get(family),
+                enchantment.get("potency"),
+            )  # fmt: skip
+        )
+    for ability in item.special_abilities:
+        heading = f"🌟 <b>{escape(str(ability.get('name', '')))}</b>"
+        if ability.get("type"):
+            heading += f" · <code>{escape(str(ability['type']))}</code>"
+        text = [heading]
+        if ability.get("description"):
+            text.append(f"\n<i>{escape(str(ability['description']))}</i>")
+        parts.append("\n".join(text))
 
     version = view.combat_configuration_version
     token = item.item_instance_id.hex
     slot_code = SLOT_CODES[item.slot]
+    swap = InlineKeyboardButton(text="🔄 Trocar", callback_data=f"eq:c:{slot_code}:{version}")
     rows: list[list[InlineKeyboardButton]] = []
-    if context == "s":
+    if item.equipped:
         rows.append(
             [
-                InlineKeyboardButton(text="🔄 Trocar", callback_data=f"eq:c:{slot_code}:{version}"),
+                swap,
                 InlineKeyboardButton(
-                    text="❌ Desequipar", callback_data=f"eq:u:{slot_code}:{version}:s"
+                    text="❌ Desequipar", callback_data=f"eq:u:{slot_code}:{version}:{context}"
                 ),
             ]
         )
-    elif item.equipped:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="❌ Desequipar", callback_data=f"eq:u:{slot_code}:{version}:i"
-                )
-            ]
-        )
-    elif item.eligible:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="✅ Equipar", callback_data=f"eq:e:{token}:{version}:i"
-                )
-            ]
-        )
+    else:
+        rows.append([swap])
     rows.append(
         [
-            InlineKeyboardButton(text="🔮 Runas", callback_data=f"em:r:{token}"),
-            InlineKeyboardButton(text="✨ Encantamento", callback_data=f"em:e:{token}"),
-        ]
-    )
-    upkeep = []
-    if item.enhancement < 10:
-        upkeep.append(InlineKeyboardButton(text="🔨 Aprimorar", callback_data=f"em:h:{token}"))
-    if not item.favorite and not item.locked and not item.runes:
-        upkeep.append(InlineKeyboardButton(text="🔧 Desmontar", callback_data=f"em:d:{token}"))
-    if upkeep:
-        rows.append(upkeep)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="🚫 Desbloquear" if item.locked else "🚫 Bloquear",
-                callback_data=f"em:k:{token}:{item.item_version}:{version}",
-            ),
             InlineKeyboardButton(
                 text="⭐ Desfavoritar" if item.favorite else "⭐ Favoritar",
                 callback_data=f"em:f:{token}:{item.item_version}:{version}",
-            ),
+            )
         ]
     )
-    if item.reroll_available:
-        rows.append([InlineKeyboardButton(text="🎲 Reroll", callback_data=f"em:l:{token}")])
     back = "eq:r" if context == "s" else "inventory:category:equipment"
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
     return Screen(
@@ -244,40 +250,46 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
     )
 
 
-def render_equipment_candidates(view: EquipmentCandidatesView) -> Screen:
-    label = SLOT_LABELS[view.slot]
-    lines = [f"🛡️ Equipamentos · {label}", ""]
-    if view.blocked_by_two_handed:
-        lines.extend(("🔒 Arma de 2 mãos equipada", "", "Este slot está bloqueado."))
-    elif not view.candidates:
-        lines.append("Nenhum Equipamento compatível disponível.")
-    else:
-        for index, item in enumerate(view.candidates, start=1):
-            if index > 1:
-                lines.append("")
-            lines.append(f"{escape(item.name)} · +{item.enhancement}")
-            lines.append(
-                f"{RARITY_ICON.get(_rarity_label(item.rarity), '⚪')} "
-                f"{escape(_rarity_label(item.rarity))} · {SLOT_LABELS[item.slot]}"
-            )
-            lines.extend(_origin_lines(item))
-            lines.append(f"📈 Nível do Item · {item.item_level}")
-            lines.extend(_attribute_lines(item))
+def render_equipment_candidates(view: EquipmentCandidatesView, page: int = 0) -> Screen:
+    """Seleção: até 6 equipamentos compatíveis por página; o botão numérico equipa direto."""
+    back = [InlineKeyboardButton(text="↩️ Retornar", callback_data="eq:r")]
+    title = f"<b>{escape(ROOT_TITLE)}</b>"
+    if view.blocked_by_two_handed or not view.candidates:
+        text = (
+            "Esta posição está bloqueada por uma arma de 2 mãos."
+            if view.blocked_by_two_handed
+            else EMPTY_CANDIDATES_TEXT
+        )
+        return Screen(
+            f"{title}\n\n<i>{escape(text)}</i>",
+            "equipment",
+            InlineKeyboardMarkup(inline_keyboard=[back]),
+            parse_mode="HTML",
+        )
+    page, pages, start = page_bounds(len(view.candidates), page, CANDIDATES_PER_PAGE)
+    shown = view.candidates[start : start + CANDIDATES_PER_PAGE]
+    blocks = []
+    for position, item in enumerate(shown, start=1):
+        lines = [f"#{position} {rarity_emoji(item.rarity)} <b>{escape(_item_name(item))}</b>"]
+        if attributes := stat_line(item.contribution, attack_icon="🗡️"):
+            lines.append(attributes)
+        blocks.append("\n".join(lines))
+    version = view.combat_configuration_version
     buttons = [
         InlineKeyboardButton(
-            text=f"{item.name} +{item.enhancement}",
-            callback_data=(
-                f"eq:e:{item.item_instance_id.hex}:{view.combat_configuration_version}:s"
-            ),
+            text=keycap(position),
+            callback_data=f"eq:e:{item.item_instance_id.hex}:{version}:s",
         )
-        for index, item in enumerate(view.candidates, start=1)
+        for position, item in enumerate(shown, start=1)
     ]
-    rows = [[button] for button in buttons]
-    rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="eq:r")])
+    code = SLOT_CODES[view.slot]
+    rows = numeric_rows(buttons)
+    rows.append(page_nav(page, pages, lambda target: f"eq:c:{code}:{version}:{target}"))
+    rows.append(back)
     return Screen(
-        "\n".join(lines),
+        "\n\n".join((title, f"<i>{escape(CANDIDATES_TEXT)}</i>", "\n\n".join(blocks))),
         "equipment",
-        InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
 

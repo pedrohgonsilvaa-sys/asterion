@@ -91,7 +91,7 @@ def equipment_router(
                 return True
         return False
 
-    async def _root(query: CallbackQuery) -> None:
+    async def _root(query: CallbackQuery, page: int = 0) -> None:
         if not isinstance(query.message, Message):
             return
         try:
@@ -99,7 +99,7 @@ def equipment_router(
         except EquipmentViewUnavailable:
             return
         if view is not None:
-            await present(query.message, render_equipment_root(view), images, edit=True)
+            await present(query.message, render_equipment_root(view, page), images, edit=True)
 
     async def _refresh_after_mutation(
         query: CallbackQuery, context: str, item_id: UUID | None
@@ -148,13 +148,13 @@ def equipment_router(
         if isinstance(query.message, Message):
             await present(query.message, render_character(), images, edit=True)
 
-    @router.callback_query(F.data == "eq:r")
+    @router.callback_query(F.data.in_({"eq:r", "eq:r:1"}))
     async def equipment_root(query: CallbackQuery):
         if await _foreground(query):
             await query.answer()
             return
         await query.answer()
-        await _root(query)
+        await _root(query, 1 if query.data == "eq:r:1" else 0)
 
     @router.callback_query(F.data.startswith("eq:s:"))
     async def equipment_slot(query: CallbackQuery):
@@ -223,9 +223,10 @@ def equipment_router(
             await query.answer()
             return
         try:
-            _, _, code, expected_raw = (query.data or "").split(":")
+            _, _, code, expected_raw, *page_raw = (query.data or "").split(":")
             slot = CODE_SLOTS[code]
             expected_version = int(expected_raw)
+            page = int(page_raw[0]) if page_raw else 0
         except (KeyError, TypeError, ValueError):
             await query.answer("Slot indisponível.", show_alert=True)
             await _root(query)
@@ -246,7 +247,7 @@ def equipment_router(
             await _root(query)
             return
         await query.answer()
-        await present(query.message, render_equipment_candidates(view), images, edit=True)
+        await present(query.message, render_equipment_candidates(view, page), images, edit=True)
 
     @router.callback_query(F.data.startswith("eq:v:"))
     async def inventory_equipment_detail(query: CallbackQuery):
