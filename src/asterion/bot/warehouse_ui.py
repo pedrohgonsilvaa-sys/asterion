@@ -179,19 +179,12 @@ def _back_row(back_to_refuge: bool) -> list[InlineKeyboardButton]:
     """Retornar preserva a origem: Mercado (antes, Refúgio do Ocaso) ou Inventário."""
     if back_to_refuge:
         return [InlineKeyboardButton(text="↩️ Retornar", callback_data="mkt:root")]
-    return [InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")]
+    return [InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:root")]
 
 
 def _render_root(view: WarehouseView, page: int, back_to_refuge: bool) -> Screen:
-    lines = [
-        "🗄️ Armazém",
-        "",
-        f"Local seguro · {escape(view.location or 'indisponível')}",
-    ]
-    if not view.accessible:
-        lines.append("Acesse um Braseiro permanente descoberto para usar o Armazém.")
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[_back_row(back_to_refuge)])
-        return Screen("\n".join(lines), "warehouse", keyboard)
+    # Especificação consolidada 2026-11-26 §4: o Armazém não exige Braseiro permanente.
+    lines = ["🗄️ Armazém", ""]
     page, pages, start, entries = page_slice(view.entries, page)
     lines.extend(_capacity_lines(view))
     lines.extend(page_line(page, pages))

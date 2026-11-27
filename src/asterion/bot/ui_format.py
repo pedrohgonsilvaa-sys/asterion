@@ -148,3 +148,39 @@ def identity(
             f"🎖️ {mono(title or DEFAULT_TITLE)}",
         )
     )
+
+
+# Especificação consolidada 2026-11-26 (Inventário, Equipamentos, Materiais, Artes e
+# Doutrinas §10): seleções 2×2, primeira palavra no botão para nomes longos e
+# paginação com ◀️ Anterior / ▶️ Próxima.
+KEYCAPS = ("1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟")
+PREVIOUS_LABEL = "◀️ Anterior"
+NEXT_LABEL = "▶️ Próxima"
+
+
+def keycap(position: int) -> str:
+    """``1`` → ``1️⃣``; acima de 10, o número em texto."""
+    return KEYCAPS[position - 1] if 1 <= position <= len(KEYCAPS) else f"{position}."
+
+
+def first_word(name: str) -> str:
+    """Primeira palavra do nome, para botões de nomes longos."""
+    parts = name.split()
+    return parts[0] if parts else name
+
+
+def page_bounds(total: int, page: int, size: int) -> tuple[int, int, int]:
+    """(página válida, total de páginas, início): botão antigo cai numa página que existe."""
+    pages = max(1, -(-total // size))
+    page = min(max(page, 0), pages - 1)
+    return page, pages, page * size
+
+
+def page_nav(page: int, pages: int, callback) -> list[InlineKeyboardButton]:
+    """``◀️ Anterior`` / ``▶️ Próxima``; ``callback(n)`` monta o callback da página ``n``."""
+    row = []
+    if page > 0:
+        row.append(button(PREVIOUS_LABEL, callback(page - 1)))
+    if page < pages - 1:
+        row.append(button(NEXT_LABEL, callback(page + 1)))
+    return row

@@ -20,7 +20,7 @@ _ERRORS = {
     "not_found": "Este personagem não está disponível.",
     "self": "Essa ação não vale para o seu próprio personagem.",
     "unavailable": "Essa ação não está disponível para este personagem.",
-    "no_story": "Escreva uma História no Perfil antes de compartilhar.",
+    "no_story": "Escreva uma História antes de compartilhar.",
     "story_too_long": "Encurte a História para compartilhar.",
     "story_forbidden": "Remova links e menções da História para compartilhar.",
     "community_unavailable": "O tópico Relatos ainda não foi configurado.",

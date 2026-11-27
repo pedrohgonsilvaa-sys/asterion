@@ -16,7 +16,6 @@ from asterion.application.talents import (
 from asterion.bot.character_progression_ui import (
     render_art_detail,
     render_art_root,
-    render_art_slot_choice,
     render_talent_detail,
     render_talent_list,
     render_talent_respec,
@@ -82,7 +81,9 @@ def character_progression_router(
             rendered = render_talent_root(view)
         await present(query.message, rendered, images, edit=True)
 
-    async def show_arts(query: CallbackQuery, *, art_id: str | None = None, choose: bool = False):
+    async def show_arts(
+        query: CallbackQuery, *, art_id: str | None = None, page: int = 0
+    ):
         if not isinstance(query.message, Message):
             return
         view = await active_arts.view(query.from_user.id)
@@ -90,34 +91,10 @@ def character_progression_router(
             await query.answer("Personagem indisponível.", show_alert=True)
             return
         if art_id is None:
-            rendered = render_art_root(view)
-        elif choose:
-            occupied = {entry.slot for entry in view.slots}
-            empty = [slot for slot in (1, 2, 3) if slot not in occupied]
-            if len(empty) == 1:
-                try:
-                    await active_arts.equip_art(
-                        query.from_user.id,
-                        empty[0],
-                        art_id,
-                        expected_configuration_version=view.combat_configuration_version,
-                    )
-                except ActiveArtMutationRejected as exc:
-                    await query.answer(_art_mutation_message(exc, art_id), show_alert=True)
-                    await show_arts(query)
-                    return
-                except CombatConfigurationLocked:
-                    await query.answer(
-                        "Configuração bloqueada durante a atividade.", show_alert=True
-                    )
-                    await show_arts(query)
-                    return
-                await query.answer("Arte equipada.")
-                await show_arts(query)
-                return
-            await query.answer()
-            rendered = render_art_slot_choice(view, art_id)
+            rendered = render_art_root(view, page)
         else:
+            # A escolha da posição acontece no próprio detalhe (§9): sem tela
+            # intermediária de "Equipar Arte".
             rendered = render_art_detail(view, art_id)
         await present(query.message, rendered, images, edit=True)
 
@@ -202,6 +179,10 @@ def character_progression_router(
             await query.answer()
             await show_arts(query)
             return
+        if len(parts) == 3 and parts[1] == "p" and parts[2].isdecimal():
+            await query.answer()
+            await show_arts(query, page=int(parts[2]))
+            return
         try:
             action = parts[1]
             if action == "d" and len(parts) == 4:
@@ -236,7 +217,8 @@ def character_progression_router(
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)
                     return
-                await show_arts(query, art_id=art_id, choose=True)
+                await query.answer()
+                await show_arts(query, art_id=art_id)
                 return
             if action == "s" and len(parts) == 5:
                 index, slot, expected = (
@@ -250,10 +232,28 @@ def character_progression_router(
                     view is None
                     or expected != view.combat_configuration_version
                     or art_id not in view.available_art_ids
-                    or art_id in view.weapon_incompatible_art_ids
+                    or slot not in {1, 2, 3}
                 ):
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)
+                    return
+                # A compatibilidade de arma continua como regra mecânica (§8).
+                if art_id in view.weapon_incompatible_art_ids:
+                    definition = active_art_definition(art_id)
+                    label = (
+                        weapon_requirement_label(definition)
+                        if definition is not None and definition.weapon_requirement
+                        else "uma arma compatível"
+                    )
+                    await query.answer(f"Requer {label} equipada.", show_alert=True)
+                    return
+                equipped_slot = next(
+                    (entry.slot for entry in view.slots if entry.art_id == art_id), None
+                )
+                if equipped_slot is not None and equipped_slot != slot:
+                    await query.answer(
+                        f"Esta Arte já está equipada em Slot {equipped_slot}.", show_alert=True
+                    )
                     return
                 await active_arts.equip_art(
                     actor,

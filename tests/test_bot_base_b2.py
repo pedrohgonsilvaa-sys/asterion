@@ -847,7 +847,9 @@ async def test_doctrine_rejects_two_hand_conflict_and_missing_item(database):
         await session.delete(await session.get(EquipmentItem, item_ids[0]))
     doctrine = (await service.view(actor)).doctrines[0]
     assert doctrine.incomplete_reason == "item_unavailable" and not doctrine.can_apply
-    assert "⚠️ Item Indisponível" in render_doctrine_detail(await service.view(actor), doctrine).text
+    assert "⚔️ <b>Principal</b> · <code>Indisponível</code>" in render_doctrine_detail(
+        await service.view(actor), doctrine
+    ).text
 
 
 @pytest.mark.asyncio
@@ -910,16 +912,19 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     screen = _last_screen(bot)
     assert "Cosméticos" in screen.text
     await dispatcher.feed_raw_update(
-        bot, callback_update("cos:c:1", actor=actor, update_id=3)
+        bot, callback_update(_button(screen, "🎖️ Títulos").callback_data, actor=actor, update_id=3)
     )
     screen = _last_screen(bot)
+    # Título inicial persistido primeiro; depois os Títulos conquistados.
+    assert "🎖️ <code>Caminhante das Cinzas</code>" in screen.text
     await dispatcher.feed_raw_update(
-        bot, callback_update(_button(screen, "1").callback_data, actor=actor, update_id=4)
+        bot, callback_update(_button(screen, "🎖️ Vigia").callback_data, actor=actor, update_id=4)
     )
     screen = _last_screen(bot)
+    assert "Vigia das Cinzas" in screen.text and "🌐 <b>Origem</b>" in screen.text
     await dispatcher.feed_raw_update(
         bot,
-        callback_update(_button(screen, "Usar Título").callback_data, actor=actor, update_id=5),
+        callback_update(_button(screen, "✅ Usar").callback_data, actor=actor, update_id=5),
     )
     screen = _last_screen(bot)
     assert "Vigia das Cinzas" in screen.text
@@ -927,13 +932,7 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
         bot, callback_update("character:root", actor=actor, update_id=6)
     )
     character_screen = _last_screen(bot)
-    await dispatcher.feed_raw_update(
-        bot,
-        callback_update(
-            _button(character_screen, "🪪 Perfil").callback_data, actor=actor, update_id=7
-        ),
-    )
-    assert "🎖️ <code>Vigia das Cinzas</code>" in _last_screen(bot).text
+    assert "🎖️ <code>Vigia das Cinzas</code>" in character_screen.text
 
     await dispatcher.feed_raw_update(
         bot, callback_update("character:root", actor=actor, update_id=8)
@@ -944,26 +943,26 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
         callback_update(_button(screen, "🧩 Doutrinas").callback_data, actor=actor, update_id=9),
     )
     screen = _last_screen(bot)
+    assert "🗂️ Doutrinas" in screen.text
+    requests_before = len(bot.session.make_request.call_args_list)
     await dispatcher.feed_raw_update(
         bot,
-        callback_update(_button(screen, "Nova Doutrina").callback_data, actor=actor, update_id=10),
+        callback_update(_button(screen, "➕ Criar").callback_data, actor=actor, update_id=10),
     )
-    assert sent_prompt_ids
-    prompt_id = sent_prompt_ids[-1]
-    reply_to = {
-        "message_id": prompt_id,
-        "date": 1,
-        "from": {"id": 123456, "is_bot": True, "first_name": "Asterion"},
-        "chat": {"id": actor, "type": "private"},
-        "text": "Responda a esta mensagem com o nome da Doutrina.",
-    }
+    # O pedido de nome é a própria tela, sem mensagem nova nem ForceReply (§7–§8).
+    assert not sent_prompt_ids
+    assert not any(
+        isinstance(call.args[1], SendMessage)
+        for call in bot.session.make_request.call_args_list[requests_before:]
+    )
+    assert "✏️ Envie o novo nome da Doutrina." in _last_screen(bot).text
     await dispatcher.feed_raw_update(
-        bot,
-        _message_update("Guarda da Estrada", actor=actor, update_id=11, reply_to=reply_to),
+        bot, _message_update("Guarda da Estrada", actor=actor, update_id=11)
     )
     screen = _last_screen(bot)
-    assert "Guarda da Estrada" in screen.text
-    assert "Configuração Atual" in screen.text
+    # Criada a partir da configuração atual: é a Doutrina em uso (🟢).
+    assert "🟢 <code>Guarda da Estrada</code>" in screen.text
+    assert "Ativa" not in screen.text and "Inativa" not in screen.text
 
     doctrine_service = DoctrineService(sessions, "ocaso")
     doctrine_view = await doctrine_service.view(actor)
@@ -979,16 +978,25 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     )
     edited_view = await doctrine_service.view(actor)
     edited = edited_view.doctrines[0]
-    apply_callback = (
-        f"doc:ap:{edited.doctrine_id.hex}:"
-        f"{b36(edited.revision)}:{b36(edited_view.configuration_version)}"
-    )
+    assert not edited.is_current
+    open_callback = f"doc:d:{edited.doctrine_id.hex}:{b36(edited.revision)}"
     await dispatcher.feed_raw_update(
-        bot, callback_update(apply_callback, actor=actor, update_id=12)
+        bot, callback_update(open_callback, actor=actor, update_id=12)
+    )
+    configuration = _last_screen(bot)
+    assert "⚙️ Configuração" in configuration.text
+    assert "1️⃣ <code>Golpe de Guarda</code>" in configuration.text
+    assert "Caminho" not in configuration.text and "Slot" not in configuration.text
+    await dispatcher.feed_raw_update(
+        bot,
+        callback_update(
+            _button(configuration, "✅ Usar").callback_data, actor=actor, update_id=13
+        ),
     )
     applied_screen = _last_screen(bot)
-    assert "Configuração Atual" in applied_screen.text
-    assert "Confirmar Aplicação" not in applied_screen.text
+    # Sem custo: usa direto, sem tela de confirmação, e volta às Doutrinas com 🟢.
+    assert "🟢 <code>Guarda da Estrada</code>" in applied_screen.text
+    assert "Confirmar" not in applied_screen.text
     async with sessions() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         assert character.combat_configuration_version == edited_view.configuration_version + 1

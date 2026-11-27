@@ -1223,23 +1223,40 @@ class AchievementPresentation:
     reward: str | None = None
     player_facing: bool = True
     hidden: bool = False
+    # Especificação consolidada 2026-11-26, Parte IV §7.1: Raridade e Origem só
+    # aparecem quando a Fonte as define; nenhum valor é inventado.
+    rarity: str | None = None
+    origin: str | None = None
+    emoji: str | None = None
 
 
+# Parte IV §6: Exploração, Combate, Guilda, Arena e Eventos; por decisão do autor de
+# 2026-11-27, as demais categorias do GDD §33.3 continuam, no mesmo padrão visual.
+# PvP aparece como Arena.
 ACHIEVEMENT_CATEGORIES = (
     ("exploration", "🧭 Exploração"),
     ("combat", "⚔️ Combate"),
+    ("guild", "🏰 Guilda"),
+    ("pvp", "🏟️ Arena"),
+    ("events", "🌌 Eventos"),
     ("pve", "⛓️ PvE"),
-    ("pvp", "🏅 PvP"),
-    ("guild", "🛡️ Guilda"),
     ("professions", "⚒️ Ofícios"),
-    ("chronicles", "🌌 Crônicas"),
+    ("chronicles", "📖 Crônicas"),
     ("bestiary", "🐾 Bestiário"),
     ("secrets", "👁️ Segredos"),
 )
+ACHIEVEMENT_CATEGORY_DESCRIPTIONS = {
+    "exploration": (
+        "Descubra regiões, atravesse caminhos esquecidos e registre os momentos que "
+        "marcaram sua jornada por Asterion."
+    ),
+}
 ACHIEVEMENTS = (
     AchievementPresentation(
         "feat.tdo.cinzas_na_estrada", "Cinzas na Estrada", "exploration",
-        "Concluiu o Prólogo.",
+        "Você atravessou a estrada em meio às cinzas, enfrentou o que surgiu entre as "
+        "ruínas e encontrou o primeiro caminho para seguir adiante.",
+        rarity="Comum", origin="Prólogo", emoji="🛤️",
     ),
     AchievementPresentation(
         "feat.tdo.andarilho_das_cinzas", "Andarilho das Cinzas", "exploration",

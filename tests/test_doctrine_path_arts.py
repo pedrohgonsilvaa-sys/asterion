@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
-from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
+from asterion.bot.doctrines_ui import doctrine_art_ids
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
     AGOUREIRO_ART_IDS,
@@ -22,6 +22,7 @@ from asterion.domain.arts import (
     SENTINEL_ART_IDS,
     VIGIA_ART_IDS,
 )
+from tests.ui_plain import art_choices_text
 
 
 def _views(*, level: int = 20, path: str | None = "devastador"):
@@ -60,8 +61,8 @@ def test_doctrine_choices_include_only_implemented_art_for_draft_path_and_level(
         *expected_class_arts,
         ariete,
     )
-    screen = render_art_choices(view, doctrine, 1)
-    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    screen_text = art_choices_text(view, doctrine, 1)
+    labels = [screen_text]
     assert any("Aríete" in label for label in labels)
 
     bastion_view, bastion_doctrine = _views(path="bastiao")
@@ -107,8 +108,8 @@ def test_doctrine_offers_tiro_calculado_to_vigia_at_level_18_without_path_gate()
 
     available_view, available_doctrine = vigia_views(18)
     assert art_id in doctrine_art_ids(available_view, available_doctrine)
-    screen = render_art_choices(available_view, available_doctrine, 1)
-    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    screen_text = art_choices_text(available_view, available_doctrine, 1)
+    labels = [screen_text]
     assert any("Tiro Calculado" in label for label in labels)
 
 
@@ -153,8 +154,8 @@ def test_doctrine_ui_lists_first_wave_path_art_for_its_class_and_path(
     )
 
     assert art_id in doctrine_art_ids(view, doctrine)
-    screen = render_art_choices(view, doctrine, 1)
-    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    screen_text = art_choices_text(view, doctrine, 1)
+    labels = [screen_text]
     assert any(label in button_label for button_label in labels)
 
 
@@ -206,6 +207,6 @@ def test_doctrine_ui_lists_wave3_path_art_only_at_level_38_for_its_path(
 
     available_view, available_doctrine = build_views(38)
     assert art_id in doctrine_art_ids(available_view, available_doctrine)
-    screen = render_art_choices(available_view, available_doctrine, 1)
-    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
+    screen_text = art_choices_text(available_view, available_doctrine, 1)
+    labels = [screen_text]
     assert any(label in button_label for button_label in labels)

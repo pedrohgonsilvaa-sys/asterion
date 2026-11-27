@@ -32,6 +32,7 @@ from asterion.domain.weapon_metadata import (
     weapon_type_id_for_recipe,
     weapon_type_id_for_reward_source,
 )
+from tests.ui_plain import plain
 
 EXPECTED_CANONICAL_WEAPONS = (
     (
@@ -470,7 +471,8 @@ def test_active_art_weapon_requirements_match_the_current_explicit_matrix():
     assert weapon_requirement_satisfied(defensive_art, frozenset())
 
 
-def test_weapon_incompatible_art_detail_explains_requirement_without_equip_action():
+def test_weapon_incompatible_art_detail_keeps_compatibility_as_a_mechanical_rule():
+    """Parte I §8: sem campo de Requisito de Arma; a regra é verificada ao equipar."""
     art_id = VIGIA_ART_IDS["disparo_preciso"]
     view = ActiveArtCharacterView(
         character_id=uuid4(),
@@ -486,15 +488,15 @@ def test_weapon_incompatible_art_detail_explains_requirement_without_equip_actio
     )
     detail = render_art_detail(view, art_id)
 
-    assert "Arco ou Besta compatível" in detail.text
-    assert "equipe uma arma compatível" in detail.text
+    assert "Arco ou Besta compatível" not in detail.text
+    assert "Requisito" not in detail.text
     buttons = [
         button.text
         for row in detail.keyboard.inline_keyboard
         for button in row
     ]
-    assert "Equipar Arte" not in buttons
-    assert "Desequipar Arte" in buttons
+    assert "1️⃣ Equipar Arte [Slot 1]" in buttons
+    assert "❌ Desequipar" in buttons
 
     unconfigured = render_art_detail(replace(view, slots=()), art_id)
     unconfigured_buttons = [
@@ -502,7 +504,7 @@ def test_weapon_incompatible_art_detail_explains_requirement_without_equip_actio
         for row in unconfigured.keyboard.inline_keyboard
         for button in row
     ]
-    assert "Equipar Arte" not in unconfigured_buttons
+    assert "❌ Desequipar" not in unconfigured_buttons
 
 
 def test_errante_corte_duplo_detail_shows_two_hits_and_explicit_weapon_requirement():
@@ -526,7 +528,7 @@ def test_errante_corte_duplo_detail_shows_two_hits_and_explicit_weapon_requireme
     )
     detail = render_art_detail(view, art_id)
     assert "Corte Duplo" in detail.text
-    assert "Dano · 60% ATQ por golpe" in detail.text
-    assert "Atinge · 2 vezes" in detail.text
-    assert "Recarga · 3 Rodadas" in detail.text
-    assert "Arma corpo a corpo compatível" in detail.text
+    assert "Dano · 60% ATQ por golpe" in plain(detail.text)
+    assert "Atinge · 2 vezes" in plain(detail.text)
+    assert "Recarga · 3 Rodadas" in plain(detail.text)
+    assert "Arma corpo a corpo compatível" not in detail.text

@@ -84,11 +84,20 @@ def test_catalog_has_exactly_three_categories_and_no_legacy_types():
 
 
 def test_hub_shows_exactly_three_categories_with_opening_phrase():
+    """Parte IV §2: Aparência, Títulos e Molduras, com a frase de abertura fechada."""
     screen = render_cosmetics_root(_view_stub())
     text_ = _texts(screen)
-    assert "Escolha como seu personagem se apresenta em Asterion" in screen.text
-    for label in ("🧍 Aparência · Visual", "🎖️ Título · Identidade", "🖼️ Moldura · Perfil"):
-        assert label in screen.text
+    assert "<b>🎨 Cosméticos</b>" in screen.text
+    assert (
+        "<i>Escolha como o personagem se apresenta em Asterion e quais marcas da jornada "
+        "deseja carregar consigo.</i>" in screen.text
+    )
+    assert [b.text for row in screen.keyboard.inline_keyboard for b in row] == [
+        "👘 Aparência",
+        "🎖️ Títulos",
+        "🖼️ Molduras",
+        "↩️ Retornar",
+    ]
     assert "Emblema" not in text_ and "Banner" not in text_
     category_buttons = [
         b
@@ -101,44 +110,64 @@ def test_hub_shows_exactly_three_categories_with_opening_phrase():
 
 def test_category_screens_have_no_selected_label_nor_unsourced_origin():
     view = _view_stub(selected=TITLE, items=[TITLE, "cosmetic.title.varzeas.andarilho_da_salmoura"])
-    title = render_cosmetic_category(view.categories[1])
+    title = render_cosmetic_category(view.categories[1], view)
     assert "Selecionado" not in title.text
     assert "Concessão não definida" not in title.text
-    assert title.text.index("Vigia das Cinzas") < title.text.index("Outros Títulos")
-    assert "Andarilho da Salmoura" in title.text  # sem Feito: aparece sem origem inventada
+    # Título inicial primeiro, depois os conquistados; botões com a primeira palavra.
+    assert title.text.index("Caminhante das Cinzas") < title.text.index("Vigia das Cinzas")
+    assert "Andarilho da Salmoura" in title.text
+    labels = [b.text for row in title.keyboard.inline_keyboard for b in row]
+    assert labels[:3] == ["🎖️ Caminhante", "🎖️ Vigia", "🎖️ Andarilho"]
     for category in view.categories:
-        assert "Emblema" not in render_cosmetic_category(category).text
-        assert "Banner" not in render_cosmetic_category(category).text
+        assert "Emblema" not in render_cosmetic_category(category, view).text
+        assert "Banner" not in render_cosmetic_category(category, view).text
 
 
 def test_use_buttons_follow_ui():
+    """Parte IV §8: ``✅ Usar`` é o padrão para equipar qualquer cosmético."""
     view = _view_stub(items=[APPEARANCE, TITLE, FRAME])
-    for kind, expected in (
-        ("appearance", "Equipar"),
-        ("title", "Usar Título"),
-        ("frame", "Usar Moldura"),
-    ):
+    for kind in ("appearance", "title", "frame"):
         category = next(c for c in view.categories if c.cosmetic_type == kind)
         index = next(
             i for i, d in enumerate(COSMETICS) if d.cosmetic_id == category.items[0].cosmetic_id
         )
-        labels = [
-            b.text
-            for row in render_cosmetic_detail(view, index).keyboard.inline_keyboard
-            for b in row
-        ]
-        assert expected in labels
+        detail = render_cosmetic_detail(view, index)
+        labels = [b.text for row in detail.keyboard.inline_keyboard for b in row]
+        assert labels == ["✅ Usar", "↩️ Retornar"]
+        assert "🌐 <b>Origem</b>" in detail.text
 
 
 def test_default_appearance_is_the_absence_of_a_selection_not_a_catalog_entry():
     assert all(DEFAULT_APPEARANCE_NAME != d.name for d in COSMETICS)
-    nothing = render_cosmetic_category(_view_stub().categories[0])
-    assert nothing.text.count(DEFAULT_APPEARANCE_NAME) == 1  # destaque no topo
-    assert "Equipar" not in _texts(render_cosmetic_default_appearance(_view_stub()))
+    nothing = render_cosmetic_category(_view_stub().categories[0], _view_stub())
+    assert nothing.text.count(DEFAULT_APPEARANCE_NAME) == 1
+    assert "🌒 <code>Viajante de Asterion</code>" in nothing.text
+    detail = render_cosmetic_default_appearance(_view_stub())
+    assert "👘 <b>Viajante de Asterion</b>" in detail.text
+    assert (
+        "<i>O visual simples de quem atravessa Asterion sem pertencer a lugar algum.</i>"
+        in detail.text
+    )
+    assert "✨ <b>Raridade</b> · <code>Comum</code>" in detail.text
+    assert "🌐 <b>Origem</b> · <code>Aparência Inicial</code>" in detail.text
+    assert "✅ Usar" in _texts(detail)
     other = _view_stub(selected=APPEARANCE, items=[APPEARANCE])
-    listed = render_cosmetic_category(other.categories[0])
-    assert listed.text.index("Errante das Cinzas") < listed.text.index(DEFAULT_APPEARANCE_NAME)
-    assert "Equipar" in _texts(render_cosmetic_default_appearance(other))
+    listed = render_cosmetic_category(other.categories[0], other)
+    assert listed.text.index(DEFAULT_APPEARANCE_NAME) < listed.text.index("Errante das Cinzas")
+    assert "✅ Usar" in _texts(render_cosmetic_default_appearance(other))
+
+
+def test_frames_start_empty_without_default_frame_or_selection_button():
+    """Parte IV §5: sem Moldura Padrão; sem Molduras, só o estado vazio e Retornar."""
+    view = _view_stub()
+    frames = render_cosmetic_category(view.categories[2], view)
+    assert "<i>Você ainda não possui nenhuma moldura.</i>" in frames.text
+    assert "Moldura Padrão" not in frames.text
+    assert [b.text for row in frames.keyboard.inline_keyboard for b in row] == ["↩️ Retornar"]
+    owned = _view_stub(items=[FRAME])
+    listed = render_cosmetic_category(owned.categories[2], owned)
+    assert "Você ainda não possui" not in listed.text
+    assert len([b for row in listed.keyboard.inline_keyboard for b in row]) == 2
 
 
 def test_legacy_conversion_and_retirement_catalog():

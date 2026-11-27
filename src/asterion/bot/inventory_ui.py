@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.inventory import InventoryEntry, InventoryView, origin_label
 from asterion.bot.creation_ui import Screen
-from asterion.bot.flavor_ui import with_flavor
+from asterion.bot.ui_format import first_word, page_bounds, page_nav, pairs
 from asterion.domain.consumables import grade_label
 
 # Keeps a page of the longest possible entries under Telegram's 4096-character limit.
@@ -291,43 +291,168 @@ def page_buttons(page: int, pages: int, prefix: str) -> list[list[InlineKeyboard
     return [row] if row else []
 
 
-def render_inventory(view: InventoryView, page: int = 0) -> Screen:
-    if view.kind == "inventory_root":
-        text = (
-            "🎒 Inventário\n\n"
-            f"📦 Espaço · {view.used_slots}/{view.capacity}\n\n"
-            f"🛡️ Equipamentos · {view.equipment_slots}\n"
-            f"🧪 Consumíveis · {view.consumable_slots}\n"
-            f"🧱 Materiais · {view.material_slots}\n"
-            f"🔷 Runas · {view.rune_slots}\n"
-            f"📦 Pendentes · {view.pending_count}/{view.pending_capacity}"
-            + (
-                f" · {view.blocked_delivery_count} aguardando espaço"
-                if view.blocked_delivery_count
-                else ""
-            )
+# Especificação consolidada 2026-11-26, Parte I §3, §5 e §6.
+INVENTORY_TITLE = "🎒 Inventário"
+INVENTORY_TEXT = (
+    "Cada item encontrado permanece registrado no inventário enquanto estiver sob posse "
+    "do aventureiro."
+)
+MATERIALS_TITLE = "🧱 Materiais"
+MATERIALS_TEXT = (
+    "Materiais encontrados durante a jornada podem ser armazenados, utilizados em "
+    "criações e empregados em diferentes possibilidades de Asterion."
+)
+MATERIALS_PER_PAGE = 5
+# Descrições de Material definidas pela Fonte; sem descrição, a linha não aparece.
+MATERIAL_DESCRIPTIONS = {
+    "material.tdo.residuo_ocaso": (
+        "Um resíduo condensado das forças que atravessam as regiões de Asterion."
+    ),
+}
+
+
+def _field(emoji: str, label: str, value) -> str:
+    return f"{emoji} <b>{escape(label)}</b> · <code>{escape(str(value))}</code>"
+
+
+def _blocks(*parts: str | None) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def material_grade(entry: InventoryEntry) -> str | None:
+    _, meta = MATERIAL_META.get(entry.key, ("🧱", "Material"))
+    marker = "Grau "
+    return meta.split(marker, 1)[1] if marker in meta else None
+
+
+def material_source(entry: InventoryEntry) -> str | None:
+    source = (entry.payload or {}).get("warehouse_source_id")
+    return str(source).replace("-", "") if source else None
+
+
+def render_inventory_root(view: InventoryView) -> Screen:
+    counts = "\n".join(
+        (
+            _field("🛡️", "Equipamentos", view.equipment_slots),
+            _field("🧪", "Consumíveis", view.consumable_slots),
+            _field("🧱", "Materiais", view.material_slots),
+            _field("🔷", "Runas", view.rune_slots),
         )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(text=label, callback_data=f"inventory:category:{key}")
-                    for label, key in (
-                        ("Equipamentos", "equipment"),
-                        ("Consumíveis", "consumables"),
-                    )
-                ],
-                [
-                    InlineKeyboardButton(text=label, callback_data=f"inventory:category:{key}")
-                    for label, key in (("Materiais", "materials"), ("Runas", "runes"))
-                ],
-                [
-                    InlineKeyboardButton(text="Armazém", callback_data="warehouse:root"),
-                    InlineKeyboardButton(text="Pendentes", callback_data="pending:root"),
-                ],
-                [InlineKeyboardButton(text="← Personagem", callback_data="character:root")],
+    )
+    space = "\n".join(
+        (
+            _field("🎒", "Espaço Inventário", f"{view.used_slots}/{view.capacity}"),
+            _field(
+                "📦", "Entregas Pendentes", f"{view.pending_count}/{view.pending_capacity}"
+            ),
+        )
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🛡️ Equipamentos", callback_data="inventory:category:equipment"
+                ),
+                InlineKeyboardButton(
+                    text="🧪 Consumíveis", callback_data="inventory:category:consumables"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🧱 Materiais", callback_data="inventory:category:materials"
+                ),
+                InlineKeyboardButton(text="🔷 Runas", callback_data="inventory:category:runes"),
+            ],
+            [
+                # O Armazém não exige Braseiro permanente descoberto (§4).
+                InlineKeyboardButton(text="🗄️ Armazém", callback_data="warehouse:root"),
+                InlineKeyboardButton(text="📦 Pendentes", callback_data="pending:root"),
+            ],
+            [InlineKeyboardButton(text="↩️ Retornar", callback_data="character:root")],
+        ]
+    )
+    return Screen(
+        _blocks(f"<b>{INVENTORY_TITLE}</b>", f"<i>{escape(INVENTORY_TEXT)}</i>", counts, space),
+        "inventory",
+        keyboard,
+        parse_mode="HTML",
+    )
+
+
+def render_materials(view: InventoryView, page: int = 0) -> Screen:
+    """Até 5 Materiais por página, botões 2×2 com a primeira palavra do nome (§5)."""
+    entries = [entry for entry in view.entries if entry.kind == "material"]
+    page, pages, start = page_bounds(len(entries), page, MATERIALS_PER_PAGE)
+    shown = entries[start : start + MATERIALS_PER_PAGE]
+    listing = "\n".join(
+        f"{MATERIAL_META.get(entry.key, ('🧱', ''))[0]} <b>{escape(entry.title)}</b> · "
+        f"<code>{entry.quantity}</code>"
+        for entry in shown
+    )
+    buttons = [
+        InlineKeyboardButton(
+            text=f"{MATERIAL_META.get(entry.key, ('🧱', ''))[0]} {first_word(entry.title)}",
+            callback_data=f"inventory:material:{source}:{page}",
+        )
+        for entry in shown
+        if (source := material_source(entry))
+    ]
+    rows = [
+        *pairs(buttons),
+        page_nav(page, pages, lambda target: f"inventory:category:materials:{target}"),
+        [InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:root")],
+    ]
+    return Screen(
+        _blocks(
+            f"<b>{MATERIALS_TITLE}</b>",
+            f"<i>{escape(MATERIALS_TEXT)}</i>",
+            listing or "<i>Nenhum Material no Inventário.</i>",
+        ),
+        "inventory",
+        InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
+        parse_mode="HTML",
+    )
+
+
+def render_material_detail(entry: InventoryEntry, page: int = 0) -> Screen:
+    """Detalhe do Material (§6): Grau, Quantidade, Tipo e Vínculo; ação Guardar."""
+    icon = MATERIAL_META.get(entry.key, ("🧱", ""))[0]
+    description = MATERIAL_DESCRIPTIONS.get(entry.key)
+    grade = material_grade(entry)
+    fields = [
+        *([_field("✨", "Grau", grade)] if grade else []),
+        _field("📦", "Quantidade", entry.quantity),
+        _field("🧱", "Tipo", "Material"),
+        *([_field("🔗", "Vínculo", "Vinculado")] if entry.bound else []),
+    ]
+    rows = []
+    if source := material_source(entry):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="📦 Guardar", callback_data=f"warehouse:deposit:material:{source}"
+                )
             ]
         )
-        return with_flavor(Screen(text, "inventory", keyboard), "inventario")
+    back = "inventory:category:materials" + (f":{page}" if page else "")
+    rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
+    return Screen(
+        _blocks(
+            f"{icon} <b>{escape(entry.title)}</b>",
+            f"<i>{escape(description)}</i>" if description else None,
+            "\n".join(fields),
+        ),
+        "inventory",
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )
+
+
+def render_inventory(view: InventoryView, page: int = 0) -> Screen:
+    if view.kind == "inventory_root":
+        return render_inventory_root(view)
+    if view.kind == "inventory_category" and view.category == "materials":
+        return render_materials(view, page)
 
     if view.kind == "inventory_category":
         headings = {
@@ -405,7 +530,7 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
             [button] for button in consumable_buttons
         )
         rows.extend(page_buttons(page, pages, f"inventory:category:{view.category}"))
-        rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
+        rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:root")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         return Screen("\n".join(lines), "inventory", keyboard, parse_mode="HTML")
 
@@ -481,6 +606,6 @@ def render_inventory(view: InventoryView, page: int = 0) -> Screen:
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="← Inventário", callback_data="inventory:root")])
+    rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:root")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     return Screen("\n".join(lines), "pending", keyboard, parse_mode="HTML")

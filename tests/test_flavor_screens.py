@@ -68,10 +68,15 @@ def _inventory_view() -> InventoryView:
 
 GUILD = _guild_view(GuildRole.LEADER)  # uma vez só: o id da Guilda entra nos botões
 
-SYSTEM_SCREENS = {
+# Inventário, Equipamentos e Artes seguem as telas fechadas da especificação
+# consolidada 2026-11-26 (Parte I), com descrição própria e sem linha de Flavor.
+SPEC_SCREENS = {
     "inventario": lambda: render_inventory(_inventory_view()),
     "equipamentos": lambda: render_equipment_root(_equipment_root()),
     "artes": lambda: render_art_root(_art_view()),
+}
+
+SYSTEM_SCREENS = {
     "talentos": lambda: render_talent_root(_talent_view()),
     "oficios": lambda: render_profession_home(_profession_view()),
     "legado": lambda: render_legacy(_legacy_view()),
@@ -116,6 +121,17 @@ def test_system_screen_without_flavor_is_unchanged(name, monkeypatch):
     screen = SYSTEM_SCREENS[name]()
     assert "<i>" not in screen.text
     assert screen.parse_mode in (None, "HTML")
+
+
+@pytest.mark.parametrize("name", SPEC_SCREENS)
+def test_consolidated_spec_screens_have_no_flavor_line(name, fixed_clock):
+    screen = SPEC_SCREENS[name]()
+    entry = select_flavor(
+        FLAVOR_CATALOG,
+        FlavorContext(kind=FlavorKind.SYSTEM, scope="system", key=name, now_epoch=NOW_EPOCH),
+    )
+    assert entry is None or escape(entry.text, quote=False) not in screen.text
+    assert screen.text.count("<i>") == 1  # só a descrição fechada da tela
 
 
 def test_flavor_is_stable_inside_the_window_and_changes_screen_only_by_text():

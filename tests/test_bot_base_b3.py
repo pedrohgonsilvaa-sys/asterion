@@ -477,7 +477,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     await dispatcher.feed_raw_update(
         bot, _message_update("/perfil", actor=actor, update_id=update_id)
     )
-    assert "📇 Perfil" in _last_screen(bot).text
+    assert "📖 História" in _last_screen(bot).text
     update_id += 1
     await dispatcher.feed_raw_update(
         bot, _message_update("/cancelar", actor=actor, update_id=update_id)
@@ -504,7 +504,7 @@ async def test_settings_commands_navigation_and_no_noop_buttons(database):
     await dispatcher.feed_raw_update(
         bot, _message_update("/perfil", actor=actor, update_id=update_id)
     )
-    assert "📇 Perfil" in _last_screen(bot).text
+    assert "📖 História" in _last_screen(bot).text
     async with sessions() as session:
         active_after_queries = await session.get(GameActivity, activity_id)
         assert active_after_queries is not None and active_after_queries.status == "active"

@@ -28,6 +28,7 @@ from asterion.domain.combat_math import (
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import Account, Character
+from tests.ui_plain import plain
 
 GEADA = "class_art.tecelao.geada_tecida"
 GEADA_AGILITY = "class_art.tecelao.geada_tecida"
@@ -336,12 +337,12 @@ async def test_geada_level_gate_and_active_configuration_persist_without_weapon_
     assert available is not None
     assert GEADA in available.available_art_ids
     screen = render_art_detail(available, GEADA)
-    assert "Geada Tecida" in screen.text
-    assert "90%" in screen.text
-    assert "AGI" in screen.text and "15%" in screen.text
-    assert "Recarga · 3 Rodadas" in screen.text
-    assert "Requisito de arma · Nenhum" in screen.text
-    assert "Trama Encadeada" in screen.text
+    assert "Geada Tecida" in plain(screen.text)
+    assert "90%" in plain(screen.text)
+    assert "AGI" in plain(screen.text) and "15%" in plain(screen.text)
+    assert "Recarga · 3 Rodadas" in plain(screen.text)
+    assert "Requisito de arma" not in plain(screen.text)
+    assert "Trama Encadeada" in plain(screen.text)
 
     mutation = await service.equip_art(actor, 1, GEADA)
     assert mutation is not None and mutation.changed

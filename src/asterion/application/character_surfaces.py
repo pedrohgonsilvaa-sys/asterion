@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from asterion.application.bestiary import BESTIARY_STAGE_LABELS
@@ -41,6 +41,7 @@ from asterion.infrastructure.db.models import (
     BestiaryEvidence,
     Character,
     CharacterCosmeticSelection,
+    CharacterDoctrineInput,
     CharacterPendingInput,
     CharacterProfile,
     CodexEntry,
@@ -155,6 +156,27 @@ class AchievementView:
     category: str
     description: str
     reward: str | None
+    rarity: str | None = None
+    origin: str | None = None
+    emoji: str | None = None
+
+
+# Origem de um Feito sem Origem própria na Fonte: a Região do seu identificador.
+ACHIEVEMENT_REGION_ORIGINS = {
+    "tdo": "Terras do Ocaso",
+    "vde": "Vales dos Enforcados",
+    "nareth": "Planícies de Nareth",
+    "varzeas": "Várzeas Carmesins",
+    "altos": "Altos Cinéreos",
+    "confins": "Confins do Véu",
+}
+
+
+def achievement_origin(definition) -> str | None:
+    if definition.origin:
+        return definition.origin
+    parts = definition.achievement_id.split(".")
+    return ACHIEVEMENT_REGION_ORIGINS.get(parts[1]) if len(parts) > 2 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +310,15 @@ class CharacterSurfacesService:
                 .where(CharacterPendingInput.character_id == character.id)
                 .with_for_update()
             )
-            if lease is not None and lease.input_kind != "history":
+            if lease is not None and lease.input_kind == "doctrine_name":
+                # O pedido mais recente vence: o pedido de nome de Doutrina é encerrado.
+                await session.execute(
+                    delete(CharacterDoctrineInput).where(
+                        CharacterDoctrineInput.character_id == character.id
+                    )
+                )
+                lease.input_kind = "history"
+            elif lease is not None and lease.input_kind != "history":
                 return False
             if lease is None:
                 lease = CharacterPendingInput(
@@ -554,6 +584,9 @@ class CharacterSurfacesService:
                         definition.category,
                         definition.description,
                         definition.reward,
+                        definition.rarity,
+                        achievement_origin(definition),
+                        definition.emoji,
                     )
                 )
             achievements.sort(key=lambda item: (item.category, item.name.casefold()))

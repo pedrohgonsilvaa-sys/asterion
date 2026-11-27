@@ -29,12 +29,23 @@ def test_inventory_root_uses_official_categories_and_real_callbacks():
             rune_slots=2,
         )
     )
-    assert "🎒 Inventário" in screen.text
-    assert "📦 Espaço · 12/60" in screen.text
-    assert "🛡️ Equipamentos · 3" in screen.text
-    assert "🧪 Consumíveis · 2" in screen.text
-    assert "🧱 Materiais · 5" in screen.text
-    assert "🔷 Runas · 2" in screen.text
+    # Especificação consolidada 2026-11-26, Parte I §3.
+    assert screen.text.startswith(
+        "<b>🎒 Inventário</b>\n\n<i>Cada item encontrado permanece registrado no inventário "
+        "enquanto estiver sob posse do aventureiro.</i>"
+    )
+    assert "🛡️ <b>Equipamentos</b> · <code>3</code>" in screen.text
+    assert "🧪 <b>Consumíveis</b> · <code>2</code>" in screen.text
+    assert "🧱 <b>Materiais</b> · <code>5</code>" in screen.text
+    assert "🔷 <b>Runas</b> · <code>2</code>" in screen.text
+    assert "🎒 <b>Espaço Inventário</b> · <code>12/60</code>" in screen.text
+    assert "📦 <b>Entregas Pendentes</b> · <code>0/20</code>" in screen.text
+    assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
+        ["🛡️ Equipamentos", "🧪 Consumíveis"],
+        ["🧱 Materiais", "🔷 Runas"],
+        ["🗄️ Armazém", "📦 Pendentes"],
+        ["↩️ Retornar"],
+    ]
     callbacks = _callbacks(screen)
     assert "inventory:category:equipment" in callbacks
     assert "inventory:category:consumables" in callbacks
@@ -62,10 +73,9 @@ def test_inventory_category_renders_source_supported_item_metadata():
             ),
         )
     )
-    assert "🧱 Materiais" in screen.text
-    assert "⛏️ Ferro de Fuligem · 23" in screen.text
-    assert "Metal · Grau I" in screen.text
-    assert "🔗 Vinculado" in screen.text
+    assert "<b>🧱 Materiais</b>" in screen.text
+    assert "⛏️ <b>Ferro de Fuligem</b> · <code>23</code>" in screen.text
+    # Sem a origem da pilha não há botão de detalhe; o Retornar continua.
     assert _callbacks(screen) == ["inventory:root"]
 
 
@@ -100,11 +110,12 @@ def test_warehouse_root_requires_safe_access_and_shows_canonical_capacities():
     from asterion.application.warehouse import WarehouseView
     from asterion.bot.warehouse_ui import render_warehouse
 
-    unsafe = render_warehouse(
-        WarehouseView("warehouse_root", uuid4(), False, None, 60, 0)
+    # Parte I §4: o Armazém não exige Braseiro permanente descoberto (gate revogado).
+    anywhere = render_warehouse(
+        WarehouseView("warehouse_root", uuid4(), True, "Campos Partidos", 60, 0)
     )
-    assert "Braseiro permanente descoberto" in unsafe.text
-    assert _callbacks(unsafe) == ["inventory:root"]
+    assert "Braseiro" not in anywhere.text and "Local seguro" not in anywhere.text
+    assert "warehouse:inventory:material" in _callbacks(anywhere)
 
     safe = render_warehouse(
         WarehouseView("warehouse_root", uuid4(), True, "Refúgio do Ocaso", 60, 100)
@@ -668,8 +679,13 @@ def test_every_inventory_category_pages_its_stack_buttons():
         )
         for _ in range(16)
     )
+    # Materiais (Parte I §5): até 5 por página, botões 2×2 com a primeira palavra.
     screen = render_inventory(_category_view("materials", entries), 1)
-    assert "Guardar Ferro" in [
-        button.text for row in screen.keyboard.inline_keyboard for button in row
-    ]
+    rows = [[button.text for button in row] for row in screen.keyboard.inline_keyboard]
+    assert rows[:3] == [["⛏️ Ferro", "⛏️ Ferro"], ["⛏️ Ferro", "⛏️ Ferro"], ["⛏️ Ferro"]]
+    assert rows[3] == ["◀️ Anterior", "▶️ Próxima"]
+    assert rows[-1] == ["↩️ Retornar"]
     assert "inventory:category:materials:0" in _callbacks(screen)
+    assert "inventory:category:materials:2" in _callbacks(screen)
+    last = render_inventory(_category_view("materials", entries), 3)
+    assert len([c for c in _callbacks(last) if c.startswith("inventory:material:")]) == 1

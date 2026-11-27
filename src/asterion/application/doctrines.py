@@ -45,6 +45,7 @@ from asterion.infrastructure.db.models import (
     CharacterDoctrineInput,
     CharacterEquipmentSlot,
     CharacterPendingInput,
+    CharacterProfile,
     CharacterTalentChoice,
     ClassTrialState,
     EquipmentItem,
@@ -277,7 +278,18 @@ class DoctrineService:
                 .where(CharacterPendingInput.character_id == character.id)
                 .with_for_update()
             )
-            if lease is not None and lease.input_kind != "doctrine_name":
+            if lease is not None and lease.input_kind == "history":
+                # O pedido mais recente vence: a tela de História já foi substituída
+                # por esta (text_prompt), então o pedido de História é encerrado.
+                profile = await session.scalar(
+                    select(CharacterProfile)
+                    .where(CharacterProfile.character_id == character.id)
+                    .with_for_update()
+                )
+                if profile is not None:
+                    profile.history_prompt_message_id = None
+                lease.input_kind = "doctrine_name"
+            elif lease is not None and lease.input_kind != "doctrine_name":
                 return False
             state = await session.scalar(
                 select(CharacterDoctrineInput)

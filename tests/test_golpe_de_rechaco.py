@@ -18,7 +18,7 @@ from asterion.application.prologue import CombatView
 from asterion.application.round import RoundService
 from asterion.bot.character_progression_ui import render_art_detail
 from asterion.bot.combat_ui import CombatCallback, event_line, render_combat
-from asterion.bot.doctrines_ui import doctrine_art_ids, render_art_choices
+from asterion.bot.doctrines_ui import doctrine_art_ids
 from asterion.domain.arts import (
     ACTIVE_ART_DEFINITIONS,
     ACTIVE_ART_IDS_BY_CLASS,
@@ -45,6 +45,7 @@ from asterion.infrastructure.db.models import (
     EquipmentItem,
     GameActivity,
 )
+from tests.ui_plain import art_choices_text, plain
 
 D = Decimal
 ZERO = D(0)
@@ -284,11 +285,11 @@ async def test_golpe_de_rechaco_melee_gate_slots_persistence_and_reconnect(datab
     assert RECHACO_ID not in view.weapon_incompatible_art_ids
     assert RECHACO_ID in class_player_actions("sentinela", configuration.art_ids, "bastiao")
     detail = render_art_detail(view, RECHACO_ID)
-    assert "Desbloqueio · Nv.34" in detail.text
-    assert "145% ATQ" in detail.text
-    assert "+10 p.p. PER" in detail.text
-    assert "Retaliação ativa no início da ação" in detail.text
-    assert "Arma corpo a corpo compatível" in detail.text
+    assert "Desbloqueio · Nv. 34" in plain(detail.text)
+    assert "145% ATQ" in plain(detail.text)
+    assert "+10 p.p. PER" in plain(detail.text)
+    assert "Retaliação ativa no início da ação" in plain(detail.text)
+    assert "Arma corpo a corpo compatível" not in plain(detail.text)
 
     with pytest.raises(ActiveArtMutationRejected) as stale:
         await service.equip_art(actor, 1, RECHACO_ID, expected_configuration_version=0)
@@ -459,12 +460,8 @@ def test_golpe_de_rechaco_is_available_to_doctrines_for_both_paths():
             can_apply=True,
         )
         assert RECHACO_ID in doctrine_art_ids(collection, doctrine)
-        screen = render_art_choices(collection, doctrine, 1)
-        assert any(
-            "Golpe de Rechaço" in button.text
-            for row in screen.keyboard.inline_keyboard
-            for button in row
-        )
+        screen_text = art_choices_text(collection, doctrine, 1)
+        assert "Golpe de Rechaço" in screen_text
         assert RECHACO_ID not in doctrine_art_ids(
             DoctrineCollectionView(
                 character_name="Sentinela",

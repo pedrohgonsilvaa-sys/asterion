@@ -160,8 +160,14 @@ async def test_safe_location_stale_preview_and_operation_snapshot(database):
         )
         world = await session.get(WorldState, character.id)
         world.location = "Área sem Braseiro"
-    with pytest.raises(WarehouseRejected, match="SAFE_LOCATION_REQUIRED"):
-        await service.prepare_transfer(actor, "deposit", "material", stack_id)
+    # Especificação consolidada 2026-11-26, Parte I §4: o gate de Braseiro permanente
+    # foi revogado; o Armazém funciona em qualquer Local e não deve voltar a bloquear.
+    away = await service.prepare_transfer(actor, "deposit", "material", stack_id)
+    assert away is not None
+    result = await service.confirm(actor, away.operation_id)
+    assert result.status != "SAFE_LOCATION_REQUIRED"
+    root = await service.root(actor)
+    assert root is not None and root.accessible
 
 
 @pytest.mark.asyncio
@@ -1578,13 +1584,32 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
         bot, callback_update("inventory:category:materials", actor=actor)
     )
     first = bot.session.make_request.call_args.args[1]
-    assert "Página 1/2" in first.text
+    # Materiais (Parte I §5): 5 por página, 16 pilhas → 4 páginas.
+    assert first.text.count("Couro Escoriado") == 5
+    labels = [b.text for row in first.reply_markup.inline_keyboard for b in row]
+    assert "▶️ Próxima" in labels and "◀️ Anterior" not in labels
 
     await dispatcher.feed_raw_update(
-        bot, callback_update("inventory:category:materials:1", update_id=3, actor=actor)
+        bot, callback_update("inventory:category:materials:3", update_id=3, actor=actor)
     )
-    second = bot.session.make_request.call_args.args[1]
-    assert "Página 2/2" in second.text
+    last = bot.session.make_request.call_args.args[1]
+    assert last.text.count("Couro Escoriado") == 1
+    detail = next(
+        b.callback_data
+        for row in last.reply_markup.inline_keyboard
+        for b in row
+        if b.callback_data.startswith("inventory:material:")
+    )
+    await dispatcher.feed_raw_update(bot, callback_update(detail, update_id=4, actor=actor))
+    material = bot.session.make_request.call_args.args[1]
+    assert "🐾 <b>Couro Escoriado</b>" in material.text
+    assert "📦 <b>Quantidade</b> · <code>5</code>" in material.text
+    assert "🧱 <b>Tipo</b> · <code>Material</code>" in material.text
+    labels = [b.text for row in material.reply_markup.inline_keyboard for b in row]
+    assert labels == ["📦 Guardar", "↩️ Retornar"]
+    assert material.reply_markup.inline_keyboard[-1][0].callback_data == (
+        "inventory:category:materials:3"
+    )
 
 
 @pytest.mark.asyncio

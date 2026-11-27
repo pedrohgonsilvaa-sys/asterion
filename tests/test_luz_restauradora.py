@@ -37,6 +37,7 @@ from asterion.domain.combat_math import CURRENT_COMBAT_RULESET, resolve_combat_s
 from asterion.domain.prologue import PROFILE
 from asterion.infrastructure.db.combat_codec import decode, encode
 from asterion.infrastructure.db.models import Account, Character
+from tests.ui_plain import plain
 
 LUZ = LUMINAR_ART_IDS["luz_restauradora"]
 
@@ -437,11 +438,11 @@ async def test_luz_level_gate_persistence_ui_doctrine_and_path_revalidation(data
     eligible = await service.view(actor)
     assert eligible is not None and LUZ in eligible.available_art_ids
     screen = render_art_detail(eligible, LUZ)
-    assert "Luz Restauradora" in screen.text
-    assert "70% ATQ" in screen.text and "35% ATQ" in screen.text
-    assert "2T" in screen.text and "Recarga · 4 Rodadas" in screen.text
-    assert "Você ou Aliado" in screen.text
-    assert "Requisito de arma · Nenhum" in screen.text
+    assert "Luz Restauradora" in plain(screen.text)
+    assert "70% ATQ" in plain(screen.text) and "35% ATQ" in plain(screen.text)
+    assert "2T" in plain(screen.text) and "Recarga · 4 Rodadas" in plain(screen.text)
+    assert "Você ou Aliado" in plain(screen.text)
+    assert "Requisito de arma" not in plain(screen.text)
 
     await service.equip_art(actor, 1, LUZ)
     async with sessions.begin() as session:
