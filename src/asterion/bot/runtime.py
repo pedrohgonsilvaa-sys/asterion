@@ -32,6 +32,7 @@ from asterion.application.groups import GroupService
 from asterion.application.guild_battle import GuildBattleService
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
+from asterion.application.item_discard import DiscardService
 from asterion.application.legacy import LegacyService
 from asterion.application.legacy_marks import LegacyMarksService
 from asterion.application.market import MarketService
@@ -232,6 +233,7 @@ def get_bot_runtime() -> BotRuntime:
     )
     inventory = InventoryService(SessionFactory, settings.server_id)
     warehouse = WarehouseService(SessionFactory, settings.server_id)
+    discard = DiscardService(SessionFactory, settings.server_id)
     equipment = EquipmentService(SessionFactory, settings.server_id)
     equipment_views = EquipmentViewService(SessionFactory, settings.server_id)
     equipment_modifications = EquipmentModificationService(SessionFactory, settings.server_id)
@@ -553,6 +555,7 @@ def get_bot_runtime() -> BotRuntime:
             s36=s36,
             legacy=legacy,
             warehouse=warehouse,
+            discard=discard,
             chronicle_activities=chronicle_activities,
             chronicle_encounters=chronicle_encounters,
             tdo_explore=tdo_explore,

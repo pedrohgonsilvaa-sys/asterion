@@ -295,6 +295,7 @@ def render_material_detail(entry: InventoryEntry, page: int = 0) -> Screen:
                 )
             ]
         )
+        rows.append([discard_button("material", source)])
     back = "inventory:category:materials" + (f":{page}" if page else "")
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
     return Screen(
@@ -426,6 +427,8 @@ def _render_consumable_detail(view: InventoryView) -> Screen:
                 )
             ]
         )
+    if stack_id := material_source(entry):
+        rows.append([discard_button("consumable", stack_id)])
     rows.append(
         [
             InlineKeyboardButton(
@@ -435,3 +438,48 @@ def _render_consumable_detail(view: InventoryView) -> Screen:
         ]
     )
     return Screen("\n".join(lines), "inventory", InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+def discard_button(kind: str, item_hex: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text="🗑️ Descartar", callback_data=f"discard:ask:{kind}:{item_hex}")
+
+
+def _item_detail_callback(kind: str, item_hex: str) -> str:
+    if kind == "material":
+        return f"inventory:material:{item_hex}"
+    return "inventory:category:consumables"
+
+
+def render_discard_confirm(view) -> Screen:
+    """Confirmação de descarte, no mesmo padrão das telas de confirmação do Inventário."""
+    item_hex = view.item_id.hex
+    fields = [
+        _field("🎒", "Item", view.title),
+        _field("📦", "Quantidade", view.quantity),
+        _field("💼", "Inventário", f"{view.inventory_used}/{view.inventory_capacity}"),
+        _field("🗄️", "Armazém", f"{view.warehouse_used}/{view.warehouse_capacity}"),
+    ]
+    if getattr(view, "equipped", False):
+        fields.append("🔓 <b>Desequipar</b> · será retirado de Equipamentos antes do descarte")
+    back = _item_detail_callback(view.kind, item_hex)
+    rows = [
+        [
+            InlineKeyboardButton(
+                text="✅ Confirmar",
+                callback_data=f"discard:ok:{view.kind}:{item_hex}:{view.quantity}",
+            ),
+            InlineKeyboardButton(text="❌ Cancelar", callback_data=back),
+        ],
+        [InlineKeyboardButton(text="↩️ Retornar", callback_data=back)],
+    ]
+    return Screen(
+        _blocks(
+            "🗑️ <b>Confirmar Descarte</b>",
+            "<i>O item será removido do inventário e não poderá ser recuperado. "
+            "Ele não vai para o Armazém.</i>",
+            "\n".join(fields),
+        ),
+        "inventory",
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )

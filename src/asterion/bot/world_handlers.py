@@ -15,6 +15,7 @@ from asterion.application.dungeons import DungeonService
 from asterion.application.foreground import has_foreground_for_actor
 from asterion.application.guilds import GuildService
 from asterion.application.inventory import InventoryService
+from asterion.application.item_discard import DiscardService
 from asterion.application.legacy import (
     LegacyActionRejected,
     LegacyService,
@@ -127,6 +128,7 @@ from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.flavor_ui import with_region_flavor
 from asterion.bot.inventory_ui import (
     material_source,
+    render_discard_confirm,
     render_inventory,
     render_material_detail,
     render_rune_detail,
@@ -201,6 +203,14 @@ from asterion.domain.weapon_proficiency import ProficiencyFamily, learnable_fami
 HUNT_RANDOM = random.SystemRandom()
 
 
+def _discard_error(code: str) -> str:
+    if code == "EQUIPPED":
+        return "Desequipe o equipamento antes de descartá-lo."
+    if code == "STALE_PREVIEW":
+        return "A quantidade mudou. Abra o item novamente."
+    return _warehouse_error(code)
+
+
 def _warehouse_error(code: str) -> str:
     return {
         "SAFE_LOCATION_REQUIRED": "O Armazém exige um Braseiro permanente descoberto.",
@@ -265,6 +275,7 @@ def world_router(
     s36: S36Service | None = None,
     legacy: LegacyService | None = None,
     warehouse: WarehouseService | None = None,
+    discard: DiscardService | None = None,
     community_url: str | None = None,
     chronicle_activities: ChronicleActivityService | None = None,
     chronicle_encounters: ChronicleEncounterService | None = None,
@@ -1718,6 +1729,49 @@ def world_router(
             else render_inventory(view, page)
         )
         await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data.startswith("discard:ask:"))
+    async def discard_ask(query: CallbackQuery):
+        """Confirmação de descarte de Material ou Consumível (não vai para o Armazém)."""
+        if discard is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        parts = (query.data or "").split(":")
+        try:
+            kind, item_id = parts[2], UUID(hex=parts[3])
+            view = await discard.preview(query.from_user.id, kind, item_id)
+        except (IndexError, ValueError, WarehouseRejected) as exc:
+            message = (
+                _discard_error(exc.code) if isinstance(exc, WarehouseRejected) else "Item indisponível."
+            )
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer()
+        if view is not None:
+            await present(query.message, render_discard_confirm(view), images, edit=True)
+
+    @router.callback_query(F.data.startswith("discard:ok:"))
+    async def discard_confirm(query: CallbackQuery):
+        if discard is None or not isinstance(query.message, Message):
+            await query.answer()
+            return
+        parts = (query.data or "").split(":")
+        try:
+            kind, item_id, quantity = parts[2], UUID(hex=parts[3]), int(parts[4])
+            result = await discard.confirm(query.from_user.id, kind, item_id, quantity)
+        except (IndexError, ValueError, WarehouseRejected) as exc:
+            message = (
+                _discard_error(exc.code) if isinstance(exc, WarehouseRejected) else "Item indisponível."
+            )
+            await query.answer(message, show_alert=True)
+            return
+        await query.answer(f"{result.title} descartado.")
+        category = {"material": "materials", "consumable": "consumables"}.get(kind, "all")
+        if inventory is None:
+            return
+        view = await inventory.category(query.from_user.id, category)
+        if view is not None:
+            await present(query.message, render_inventory(view), images, edit=True)
 
     @router.callback_query(F.data.startswith("inventory:rune:"))
     async def inventory_rune(query: CallbackQuery):
