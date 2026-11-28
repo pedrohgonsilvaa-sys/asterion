@@ -533,3 +533,15 @@ def test_forge_lists_equipment_and_item_screen_exposes_the_forge_actions():
         EquipmentDetailView(uuid4(), 20, 1, replace_item(item, enhancement=10))
     )
     assert "🔨 Aprimorar" not in [b.text for b in _buttons(maxed)]
+
+
+def test_equipment_detail_shows_description_in_italics_below_the_title():
+    dagger = _item(slot=EquipmentSlot.PRINCIPAL, item_slot="Principal", name="Adaga")
+    object.__setattr__(dagger, "weapon_form_label", "Adaga")
+    text = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 3, dagger), context="i").text
+    assert "<i>Uma lâmina curta e leve, feita para golpes rápidos e precisos." in text
+    assert text.index("<i>") < text.index("Grau")
+    # Texto próprio do item (lore) tem prioridade sobre a descrição por tipo.
+    own = _item(slot=EquipmentSlot.PRINCIPAL, item_slot="Principal", lore="Texto próprio.")
+    own_text = render_equipment_detail(EquipmentDetailView(uuid4(), 10, 3, own), context="i").text
+    assert "<i>Texto próprio.</i>" in own_text

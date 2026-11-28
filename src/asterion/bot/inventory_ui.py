@@ -16,6 +16,7 @@ from asterion.bot.ui_format import (
     page_nav,
 )
 from asterion.domain.consumables import grade_label
+from asterion.domain.item_descriptions import RUNE_DESCRIPTION, material_description
 
 # UI aprovada: até 6 itens por página, cada um com seu botão numérico.
 PAGE_SIZE = 6
@@ -300,7 +301,7 @@ def render_item_list(
 def render_material_detail(entry: InventoryEntry, page: int = 0) -> Screen:
     """Detalhe do Material (§6): Grau, Quantidade, Tipo e Vínculo; ação Guardar."""
     icon = MATERIAL_META.get(entry.key, ("🧱", ""))[0]
-    description = MATERIAL_DESCRIPTIONS.get(entry.key)
+    description = MATERIAL_DESCRIPTIONS.get(entry.key) or material_description(entry.key)
     grade = material_grade(entry)
     amounts = [
         *([_field("✨", "Grau", grade)] if grade else []),
@@ -434,7 +435,11 @@ def render_rune_detail(entry: InventoryEntry) -> Screen:
     ]
     rows = [[InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:category:runes")]]
     return Screen(
-        _blocks(f"🔷 <b>{escape(entry.title)}</b>", "\n".join(fields)),
+        _blocks(
+            f"🔷 <b>{escape(entry.title)}</b>",
+            f"<i>{escape(RUNE_DESCRIPTION)}</i>",
+            "\n".join(fields),
+        ),
         CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",

@@ -34,6 +34,10 @@ from asterion.domain.equipment_modifications import (
     RUNE_FAMILIES,
     equipment_grade,
 )
+from asterion.domain.item_descriptions import (
+    EQUIPMENT_SLOT_DESCRIPTIONS,
+    WEAPON_FORM_DESCRIPTIONS,
+)
 
 SLOT_PRESENTATION = (
     (EquipmentSlot.PRINCIPAL, "Arma Principal", "🗡️", "p"),
@@ -172,6 +176,13 @@ def _component_lines(
     return "\n".join(lines)
 
 
+def _default_description(item) -> str | None:
+    """Descrição por tipo quando o item não traz texto próprio (``lore``)."""
+    if item.slot in {EquipmentSlot.PRINCIPAL, EquipmentSlot.SECUNDARIA}:
+        return WEAPON_FORM_DESCRIPTIONS.get(item.weapon_form_label or "")
+    return EQUIPMENT_SLOT_DESCRIPTIONS.get(item.slot.value)
+
+
 def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Screen:
     """Detalhe aprovado: ações somente Trocar, Desequipar, Favoritar e Retornar.
 
@@ -184,8 +195,8 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
     )
     rarity = _rarity_label(item.rarity)
     parts = [f"<b>{icon} {escape(_item_name(item))}</b>"]
-    if item.lore:
-        parts.append(f"<i>{escape(item.lore)}</i>")
+    if description := item.lore or _default_description(item):
+        parts.append(f"<i>{escape(description)}</i>")
     # Especificação visual 2026-11-28: atributos | Grau, Raridade, Quantidade |
     # Empunhadura, Proficiência, Vínculo, em três blocos.
     stats = [
