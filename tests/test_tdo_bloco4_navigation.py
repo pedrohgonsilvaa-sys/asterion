@@ -185,7 +185,7 @@ def test_menu_principal_rendering_is_not_used_inside_tdo_refuge_screen():
     # Campanha não existe no Refúgio; ⚔️ Aventura é entrada do Menu (decisão 2026-11-26).
     assert "world:adventure" not in callbacks
     assert "adv:hub" in callbacks
-    assert screen.image_key == "local:Refúgio do Ocaso"
+    assert screen.image_key == "region.tdo"
 
 
 def test_outside_tdo_local_screen_keeps_campanha_return():

@@ -988,6 +988,9 @@ class CharacterDoctrine(Base):
     """A saved reference-based character combat configuration."""
 
     __tablename__ = "character_doctrines"
+    # Sem RETURNING de colunas com default do servidor: migrations antigas ainda inserem
+    # Doutrinas num esquema anterior à coluna ``is_active``.
+    __mapper_args__ = {"eager_defaults": False}
     __table_args__ = (
         UniqueConstraint("id", "character_id", name="uq_character_doctrine_owner"),
         Index(
@@ -1021,7 +1024,7 @@ class CharacterDoctrine(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # Doutrina ativa: registrada no banco; no máximo uma por personagem.
     is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("false")
+        Boolean, nullable=False, server_default=text("false")
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

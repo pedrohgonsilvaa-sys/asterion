@@ -313,6 +313,7 @@ class DoctrineService:
                     name=system_doctrine_name(index),
                     configuration=dict(EMPTY_CONFIGURATION),
                     revision=0,
+                    is_active=False,
                     # Instantes distintos mantêm a ordem I, II, III na listagem.
                     created_at=datetime.now(UTC) + timedelta(microseconds=index),
                 )

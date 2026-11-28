@@ -325,7 +325,7 @@ async def test_region_hud_shows_bar_and_face_button(service, database):
 
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
     assert (
-        "🔥 <b>Despertar de Varkhenn</b>\n🟥🟥⬜⬜⬜⬜⬜⬜⬜⬜ <code>24%</code>"
+        "🔥 <b>Despertar de Varkhenn</b> · <code>24%</code>\n🟥🟥⬜⬜⬜⬜⬜⬜⬜⬜"
     ) in screen.text
     buttons = [b.text for row in screen.keyboard.inline_keyboard for b in row]
     assert not any(text.endswith(" Despertar") for text in buttons)
@@ -334,7 +334,8 @@ async def test_region_hud_shows_bar_and_face_button(service, database):
     assert status.flagelo_awake is True
     screen = render_refuge_dashboard(_view(), hud=RefugeHud(flagelo=status))
     pairs = {b.text: b.callback_data for row in screen.keyboard.inline_keyboard for b in row}
-    assert [data for text, data in pairs.items() if text.endswith(" Despertar")] == ["flg:hub"]
+    # O botão do Flagelo leva o nome completo dele (ex.: "🔥 Varkhenn, o Flagelo das Cinzas").
+    assert [text for text, data in pairs.items() if data == "flg:hub"]
 
 
 # ------------------------------------------------------------------ Crafting global

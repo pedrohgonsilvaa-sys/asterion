@@ -208,9 +208,9 @@ async def test_firmeza_is_equipable_without_melee_metadata_and_survives_reconnec
     assert "+12% DEF" in plain(detail.text)
     assert "2T" in plain(detail.text) and "Recarga · 3" in plain(detail.text)
     assert "Requisito de arma" not in plain(detail.text)
-    # Equipada: o detalhe oferece Desequipar além das três posições (§8).
+    # Equipada no slot 2: o próprio slot ocupado vira o botão de desequipar.
     assert any(
-        button.text == "❌ Desequipar"
+        button.text == "❌ Desequipar Arte #2"
         for row in detail.keyboard.inline_keyboard
         for button in row
     )
