@@ -17,187 +17,6 @@ def _callbacks(screen):
     ]
 
 
-def test_inventory_root_uses_official_categories_and_real_callbacks():
-    screen = render_inventory(
-        InventoryView(
-            "inventory_root",
-            uuid4(),
-            used_slots=12,
-            equipment_slots=3,
-            consumable_slots=2,
-            material_slots=5,
-            rune_slots=2,
-        )
-    )
-    # Especificação consolidada 2026-11-26, Parte I §3.
-    assert screen.text.startswith(
-        "<b>🎒 Inventário</b>\n\n<i>Cada item encontrado permanece registrado no inventário "
-        "enquanto estiver sob posse do aventureiro.</i>"
-    )
-    assert "🛡️ <b>Equipamentos</b> · <code>3</code>" in screen.text
-    assert "🧪 <b>Consumíveis</b> · <code>2</code>" in screen.text
-    assert "🧱 <b>Materiais</b> · <code>5</code>" in screen.text
-    assert "🔷 <b>Runas</b> · <code>2</code>" in screen.text
-    assert "🎒 <b>Espaço Inventário</b> · <code>12/60</code>" in screen.text
-    assert "📦 <b>Entregas Pendentes</b> · <code>0/20</code>" in screen.text
-    assert [[b.text for b in row] for row in screen.keyboard.inline_keyboard] == [
-        ["🛡️ Equipamentos", "🧪 Consumíveis"],
-        ["🧱 Materiais", "🔷 Runas"],
-        ["🗄️ Armazém", "📦 Pendentes"],
-        ["↩️ Retornar"],
-    ]
-    callbacks = _callbacks(screen)
-    assert "inventory:category:equipment" in callbacks
-    assert "inventory:category:consumables" in callbacks
-    assert "inventory:category:materials" in callbacks
-    assert "inventory:category:runes" in callbacks
-    assert callbacks[-1] == "character:root"
-    assert all(callback != "menu:noop" for callback in callbacks)
-
-
-def test_inventory_category_renders_source_supported_item_metadata():
-    screen = render_inventory(
-        InventoryView(
-            "inventory_category",
-            uuid4(),
-            used_slots=2,
-            category="materials",
-            entries=(
-                InventoryEntry(
-                    kind="material",
-                    key="material.tdo.ferro_de_fuligem",
-                    title="Ferro de Fuligem",
-                    quantity=23,
-                    bound=True,
-                ),
-            ),
-        )
-    )
-    assert "<b>🧱 Materiais</b>" in screen.text
-    assert "⛏️ <b>Ferro de Fuligem</b> · <code>23</code>" in screen.text
-    # Sem a origem da pilha não há botão de detalhe; o Retornar continua.
-    assert _callbacks(screen) == ["inventory:root"]
-
-
-def test_pending_root_is_real_read_model_without_placeholder_actions():
-    screen = render_inventory(
-        InventoryView(
-            "pending_root",
-            uuid4(),
-            used_slots=60,
-            entries=(
-                InventoryEntry(
-                    kind="material",
-                    key="pending-1",
-                    title="Couro Escoriado",
-                    quantity=3,
-                ),
-            ),
-            pending_count=20,
-            blocked_delivery_count=1,
-        )
-    )
-    assert "📦 Entregas Pendentes" in screen.text
-    assert "📦 Espaço · 20/20" in screen.text
-    assert "⚠️ Entregas aguardando espaço · 1" in screen.text
-    assert "Couro Escoriado · 3" in screen.text
-    callbacks = _callbacks(screen)
-    assert callbacks == ["pending:claim:pending1", "pending:retry", "inventory:root"]
-    assert "menu:noop" not in callbacks
-
-
-def test_warehouse_root_requires_safe_access_and_shows_canonical_capacities():
-    from asterion.application.warehouse import WarehouseView
-    from asterion.bot.warehouse_ui import render_warehouse
-
-    # Parte I §4: o Armazém não exige Braseiro permanente descoberto (gate revogado).
-    anywhere = render_warehouse(
-        WarehouseView("warehouse_root", uuid4(), True, "Campos Partidos", 60, 0)
-    )
-    assert "Braseiro" not in anywhere.text and "Local seguro" not in anywhere.text
-    assert "warehouse:inventory:material" in _callbacks(anywhere)
-
-    safe = render_warehouse(
-        WarehouseView("warehouse_root", uuid4(), True, "Refúgio do Ocaso", 60, 100)
-    )
-    assert "Inventário · 60/60" in safe.text
-    assert "Armazém · 100/100" in safe.text
-    assert "warehouse:inventory:equipment" in _callbacks(safe)
-    assert "warehouse:inventory:material" in _callbacks(safe)
-    assert "warehouse:inventory:consumable" in _callbacks(safe)
-    assert "warehouse:inventory:rune" in _callbacks(safe)
-
-
-def test_blocked_delivery_shows_reward_identity_and_only_exposes_retry():
-    screen = render_inventory(
-        InventoryView(
-            "pending_root",
-            uuid4(),
-            used_slots=60,
-            entries=(
-                InventoryEntry(
-                    kind="blocked_delivery",
-                    key="blocked-1",
-                    title="Guarda da Câmara",
-                    quantity=1,
-                    rarity="Épico",
-                    slot="Torso",
-                    item_level=30,
-                    bound=True,
-                    payload={
-                        "delivery_kind": "equipment",
-                        "origin": "mission:P18:choice",
-                        "enhancement": 2,
-                        "favorite": True,
-                    },
-                ),
-            ),
-            pending_count=20,
-            blocked_delivery_count=1,
-        )
-    )
-    assert "Guarda da Câmara" in screen.text
-    assert "Épico" in screen.text
-    assert "Nv.30" in screen.text
-    assert "Vinculado" in screen.text
-    assert "Favorito" in screen.text
-    assert "Origem · Recompensa" in screen.text
-    assert "mission:P18:choice" not in screen.text
-    assert _callbacks(screen) == ["pending:retry", "inventory:root"]
-
-
-def test_consumable_inventory_is_catalog_driven_and_callbacks_keep_stable_ids():
-    entries = tuple(
-        consumable_inventory_entry(item_id, index)
-        for index, item_id in enumerate(CONSUMABLE_CATALOG, start=1)
-    )
-    view = InventoryView(
-        "inventory_category",
-        uuid4(),
-        used_slots=len(entries),
-        category="consumables",
-        entries=entries,
-    )
-    screen = render_inventory(view)
-    assert "🧪 Poção de Cura · 1" in screen.text
-    assert "Consumível · Grau I" in screen.text
-    assert "Preparado de Proteção Enredada · 9" in screen.text
-    assert "Consumível · Grau II" in screen.text
-    assert "Consumível · Proteção" not in screen.text
-    assert not any(
-        button.text.startswith("Usar")
-        for row in screen.keyboard.inline_keyboard
-        for button in row
-    )
-    pages = -(-len(entries) // 15)
-    callbacks = [
-        callback for page in range(pages) for callback in _callbacks(render_inventory(view, page))
-    ]
-    for item_id in CONSUMABLE_CATALOG:
-        assert f"inventory:consumable:{item_id}" in callbacks
-    assert all(len(value.encode("utf-8")) <= 64 for value in callbacks)
-
-
 def test_protection_detail_matches_player_facing_source_without_floor():
     item_id = "consumable.protection.vde.ii"
     screen = render_inventory(
@@ -290,28 +109,6 @@ def test_vigor_detail_only_exposes_use_when_backend_marks_it_available():
     ]
 
 
-def test_unknown_legacy_consumable_does_not_break_inventory_renderer():
-    screen = render_inventory(
-        InventoryView(
-            "inventory_category",
-            uuid4(),
-            used_slots=1,
-            category="consumables",
-            entries=(
-                InventoryEntry(
-                    kind="consumable",
-                    key="legacy.unknown",
-                    title="legacy.unknown",
-                    quantity=2,
-                ),
-            ),
-        )
-    )
-    assert "🧪 legacy.unknown · 2" in screen.text
-    assert "Consumível" in screen.text
-    assert _callbacks(screen) == ["inventory:root"]
-
-
 def _warehouse_entries(count, **overrides):
     from asterion.application.warehouse import WarehouseEntry
 
@@ -327,74 +124,6 @@ def _warehouse_entries(count, **overrides):
     }
     values.update(overrides)
     return tuple(WarehouseEntry(id=str(uuid4()), **values) for _ in range(count))
-
-
-def test_full_warehouse_pages_fit_telegram_and_reach_every_item():
-    from asterion.application.warehouse import WarehouseView
-    from asterion.bot.warehouse_ui import render_warehouse
-
-    view = WarehouseView(
-        "warehouse_root", uuid4(), True, "Refúgio do Ocaso", 60, 100, _warehouse_entries(100)
-    )
-    withdraw = []
-    for page in range(7):
-        screen = render_warehouse(view, page)
-        assert len(screen.text) <= 4096
-        assert f"Página {page + 1}/7" in screen.text
-        withdraw.extend(
-            callback
-            for callback in _callbacks(screen)
-            if callback.startswith("warehouse:withdraw:")
-        )
-    assert len(set(withdraw)) == 100
-
-    first, second, last = (render_warehouse(view, page) for page in (0, 1, 6))
-    assert "warehouse:page:1" in _callbacks(first)
-    assert "warehouse:page:-1" not in _callbacks(first)
-    assert {"warehouse:page:0", "warehouse:page:2"} <= set(_callbacks(second))
-    assert "warehouse:page:5" in _callbacks(last)
-    assert "warehouse:page:7" not in _callbacks(last)
-    assert "16. " in second.text
-    assert render_warehouse(view, 99).text == last.text
-
-
-def test_short_warehouse_list_has_no_page_controls():
-    from asterion.application.warehouse import WarehouseView
-    from asterion.bot.warehouse_ui import render_warehouse
-
-    screen = render_warehouse(
-        WarehouseView(
-            "warehouse_root", uuid4(), True, "Refúgio do Ocaso", 1, 15, _warehouse_entries(15)
-        )
-    )
-    assert "Página" not in screen.text
-    assert not any(callback.startswith("warehouse:page:") for callback in _callbacks(screen))
-
-
-def test_warehouse_sources_page_and_explain_unavailable_items_to_the_player():
-    from asterion.application.warehouse import WarehouseView
-    from asterion.bot.warehouse_ui import render_warehouse
-
-    entries = _warehouse_entries(59) + _warehouse_entries(
-        1, eligible=False, reason="EQUIPPED"
-    )
-    view = WarehouseView(
-        "warehouse_inventory_sources",
-        uuid4(),
-        True,
-        "Refúgio do Ocaso",
-        60,
-        0,
-        entries,
-        item_kind="equipment",
-    )
-    first = render_warehouse(view)
-    last = render_warehouse(view, 3)
-    assert "warehouse:inventory:equipment:1" in _callbacks(first)
-    assert "warehouse:inventory:equipment:2" in _callbacks(last)
-    assert len(last.text) <= 4096
-    assert "Indisponível · Equipado" in last.text
-    assert "EQUIPPED" not in last.text
 
 
 def test_empty_warehouse_source_list_keeps_the_requested_title():
@@ -419,73 +148,6 @@ def test_empty_warehouse_source_list_keeps_the_requested_title():
             )
         )
         assert f"🗄️ {title} disponíveis para guardar" in screen.text
-
-
-def test_warehouse_shows_player_labels_and_official_icons():
-    from asterion.application.warehouse import WarehouseView
-    from asterion.bot.warehouse_ui import render_warehouse
-
-    root = render_warehouse(
-        WarehouseView(
-            "warehouse_root",
-            uuid4(),
-            True,
-            "Refúgio do Ocaso",
-            1,
-            1,
-            _warehouse_entries(1, title="Lâmina", rarity="rare", slot="main_hand"),
-        )
-    )
-    assert "🗄️ Armazém" in root.text
-    assert "Arma Principal" in root.text and "main_hand" not in root.text
-    assert "rare" not in root.text
-
-    deposit = render_warehouse(
-        WarehouseView(
-            "warehouse_operation",
-            uuid4(),
-            True,
-            "Refúgio do Ocaso",
-            1,
-            0,
-            operation_id=uuid4(),
-            direction="deposit",
-            item_kind="equipment",
-            title="Lâmina",
-            quantity=1,
-            status="preview",
-        )
-    )
-    assert "🗄️ Confirmar transferência" in deposit.text
-    assert "preview" not in deposit.text
-
-
-def test_protected_equipment_offers_store_but_equipped_equipment_does_not():
-    protected, equipped = uuid4(), uuid4()
-    screen = render_inventory(
-        InventoryView(
-            kind="inventory_category",
-            character_id=uuid4(),
-            used_slots=2,
-            category="equipment",
-            entries=(
-                InventoryEntry(
-                    kind="equipment",
-                    key=str(protected),
-                    title="Lâmina Protegida",
-                    payload={"locked": True},
-                ),
-                InventoryEntry(
-                    kind="equipment",
-                    key=str(equipped),
-                    title="Elmo em uso",
-                    equipped_slot="Cabeça",
-                ),
-            ),
-        )
-    )
-    assert f"warehouse:deposit:equipment:{protected.hex}" in _callbacks(screen)
-    assert f"warehouse:deposit:equipment:{equipped.hex}" not in _callbacks(screen)
 
 
 def _quantity_view(quantity, kind="consumable", direction="withdraw"):
@@ -632,60 +294,309 @@ def _category_view(category, entries):
     )
 
 
-def test_full_inventory_pages_fit_telegram_and_reach_every_item():
-    view = _category_view("equipment", _longest_equipment(60))
-    details = []
-    stored = []
-    for page in range(4):
-        screen = render_inventory(view, page)
-        assert len(screen.text) <= 4096
-        assert f"Página {page + 1}/4" in screen.text
-        details.extend(item for item in _callbacks(screen) if item.startswith("eq:v:"))
-        stored.extend(item for item in _callbacks(screen) if item.startswith("warehouse:deposit:"))
-    assert len(set(details)) == 60 and len(set(stored)) == 60
-
-    first, second, last = (render_inventory(view, page) for page in (0, 1, 3))
-    assert "inventory:category:equipment:1" in _callbacks(first)
-    assert {"inventory:category:equipment:0", "inventory:category:equipment:2"} <= set(
-        _callbacks(second)
-    )
-    assert "inventory:category:equipment:4" not in _callbacks(last)
-    assert render_inventory(view, 99).text == last.text
 
 
-def test_inventory_page_numbers_continue_across_pages():
-    view = _category_view("equipment", _longest_equipment(16))
-    screen = render_inventory(view, 1)
-    labels = [button.text for row in screen.keyboard.inline_keyboard for button in row]
-    assert any(label.startswith("Guardar ") for label in labels)
-    assert not any(label.isdigit() for label in labels)
+# ---------------------------------------------------------------------------
+# UI aprovada: Inventário, Entregas Pendentes e Armazém.
+# ---------------------------------------------------------------------------
+import pytest  # noqa: E402
+
+from asterion.bot.ui_format import numeric_row_sizes  # noqa: E402
 
 
-def test_short_inventory_list_has_no_page_controls():
-    screen = render_inventory(_category_view("equipment", _longest_equipment(15)))
-    assert "Página" not in screen.text
-    assert not any(item.startswith("inventory:category:") for item in _callbacks(screen))
+def _rows(screen):
+    return [[button.text for button in row] for row in screen.keyboard.inline_keyboard]
 
 
-def test_every_inventory_category_pages_its_stack_buttons():
-    source = str(uuid4())
-    entries = tuple(
+def _numbered(screen):
+    return [row for row in _rows(screen) if row and row[0].endswith("️⃣")]
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(1, [1]), (2, [2]), (3, [3]), (4, [2, 2]), (5, [3, 2]), (6, [3, 3]), (7, [3, 2, 2])],
+)
+def test_numeric_buttons_adapt_to_the_item_count(count, expected):
+    assert numeric_row_sizes(count) == expected
+
+
+def _materials(count):
+    return tuple(
         InventoryEntry(
             kind="material",
             key="material.tdo.ferro_de_fuligem",
-            title="Ferro",
-            quantity=1,
-            payload={"warehouse_source_id": source},
+            title="Ferro de Fuligem",
+            quantity=7,
+            payload={"warehouse_source_id": str(uuid4())},
         )
-        for _ in range(16)
+        for _ in range(count)
     )
-    # Materiais (Parte I §5): até 5 por página, botões 2×2 com a primeira palavra.
-    screen = render_inventory(_category_view("materials", entries), 1)
-    rows = [[button.text for button in row] for row in screen.keyboard.inline_keyboard]
-    assert rows[:3] == [["⛏️ Ferro", "⛏️ Ferro"], ["⛏️ Ferro", "⛏️ Ferro"], ["⛏️ Ferro"]]
-    assert rows[3] == ["◀️ Anterior", "▶️ Próxima"]
-    assert rows[-1] == ["↩️ Retornar"]
-    assert "inventory:category:materials:0" in _callbacks(screen)
-    assert "inventory:category:materials:2" in _callbacks(screen)
-    last = render_inventory(_category_view("materials", entries), 3)
-    assert len([c for c in _callbacks(last) if c.startswith("inventory:material:")]) == 1
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (1, [["1️⃣"]]),
+        (2, [["1️⃣", "2️⃣"]]),
+        (3, [["1️⃣", "2️⃣", "3️⃣"]]),
+        (4, [["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"]]),
+        (5, [["1️⃣", "2️⃣", "3️⃣"], ["4️⃣", "5️⃣"]]),
+        (6, [["1️⃣", "2️⃣", "3️⃣"], ["4️⃣", "5️⃣", "6️⃣"]]),
+    ],
+)
+def test_inventory_numeric_rows_follow_the_approved_distribution(count, expected):
+    screen = render_inventory(_category_view("all", _materials(count)))
+    assert _numbered(screen) == expected
+    assert screen.text.count("#") == count
+
+
+def test_inventory_opens_on_the_listing_with_filters_and_approved_layout():
+    entries = (
+        InventoryEntry(
+            kind="consumable", key="consumable.cura.i", title="Poção de Vida", quantity=4,
+            grade=1, payload={"family": "healing"},
+        ),
+        InventoryEntry(
+            kind="material", key="material.tdo.ferro_de_fuligem", title="Ferro de Fuligem",
+            quantity=7, payload={"warehouse_source_id": str(uuid4())},
+        ),
+        InventoryEntry(
+            kind="rune", key=str(uuid4()), title="Runa Cinérea", quantity=2, rarity="Comum",
+            grade=1, payload={"warehouse_source_id": str(uuid4())},
+        ),
+    )
+    view = InventoryView(
+        "inventory_category", uuid4(), used_slots=8, category="all", entries=entries
+    )
+    screen = render_inventory(view)
+    assert screen.text.startswith("<b>💼 Inventário</b>\n\n<i>Cada item encontrado")
+    assert "🔎 <b>Filtro</b> · <code>Todos</code>" in screen.text
+    assert "🗳️ <b>Espaço</b> · <code>8/60</code>" in screen.text
+    assert "📄 <b>Página</b> · <code>1/1</code>" in screen.text
+    assert "#2 🧱 <b>Ferro de Fuligem</b> · <code>×7</code>\n✨ <code>Grau I</code>" in screen.text
+    assert "#3 🔷 <b>Runa Cinérea</b> · <code>×2</code>\n⚪️ <code>Grau I</code>" in screen.text
+    assert "4 un." not in screen.text and "[×" not in screen.text
+    assert _rows(screen)[1:] == [
+        ["📋 Todos"],
+        ["🛡️ Equipamentos", "🧪 Consumíveis"],
+        ["🧱 Materiais", "🔷 Runas"],
+        ["📦 Entregas", "🗄️ Armazém"],
+        ["↩️ Retornar"],
+    ]
+    callbacks = _callbacks(screen)
+    for expected in (
+        "inventory:category:all",
+        "inventory:category:equipment",
+        "inventory:category:consumables",
+        "inventory:category:materials",
+        "inventory:category:runes",
+        "pending:root",
+        "warehouse:root",
+    ):
+        assert expected in callbacks
+    assert callbacks[-1] == "character:root"
+
+
+def test_inventory_consumable_line_shows_catalog_effect_and_stable_ids():
+    entries = tuple(
+        consumable_inventory_entry(item_id, index)
+        for index, item_id in enumerate(list(CONSUMABLE_CATALOG)[:6], start=1)
+    )
+    screen = render_inventory(_category_view("consumables", entries))
+    assert "#1 🧪 <b>Poção de Cura</b> · <code>×1</code>" in screen.text
+    assert "❤️ <code>Cura 22% HP</code>" in screen.text
+    callbacks = _callbacks(screen)
+    for entry in entries:
+        assert f"inventory:consumable:{entry.key}" in callbacks
+    assert all(len(value.encode("utf-8")) <= 64 for value in callbacks)
+
+
+def test_unknown_legacy_consumable_does_not_break_inventory_renderer():
+    screen = render_inventory(
+        _category_view(
+            "consumables",
+            (InventoryEntry(kind="consumable", key="legacy.unknown", title="legacy.unknown", quantity=2),),  # noqa: E501
+        )
+    )
+    assert "#1 🧪 <b>legacy.unknown</b> · <code>×2</code>" in screen.text
+
+
+def test_inventory_paginates_six_items_per_page_with_nav_above_return():
+    view = _category_view("all", _materials(14))
+    first = render_inventory(view)
+    assert "📄 <b>Página</b> · <code>1/3</code>" in first.text
+    assert _rows(first)[-2:] == [["▶️ Próxima"], ["↩️ Retornar"]]
+    middle = render_inventory(view, 1)
+    assert _rows(middle)[-2:] == [["◀️ Anterior", "▶️ Próxima"], ["↩️ Retornar"]]
+    assert "inventory:category:all:0" in _callbacks(middle)
+    assert "inventory:category:all:2" in _callbacks(middle)
+    last = render_inventory(view, 2)
+    assert _rows(last)[-2:] == [["◀️ Anterior"], ["↩️ Retornar"]]
+    assert len(_numbered(last)[0]) == 2  # 14 = 6 + 6 + 2
+    assert render_inventory(view, 99).text == last.text
+    assert all(len(render_inventory(view, page).text) <= 4096 for page in range(3))
+
+
+def test_inventory_numeric_buttons_open_each_item_detail():
+    item = uuid4()
+    entries = (
+        InventoryEntry(kind="equipment", key=str(item), title="Adaga", rarity="Comum", slot="main_hand"),  # noqa: E501
+        *_materials(1),
+        InventoryEntry(
+            kind="rune", key="r", title="Runa Cinérea", quantity=1,
+            payload={"warehouse_source_id": str(uuid4())},
+        ),
+    )
+    callbacks = _callbacks(render_inventory(_category_view("all", entries)))
+    assert callbacks[0] == f"eq:v:{item.hex}"
+    assert callbacks[1].startswith("inventory:material:")
+    assert callbacks[2].startswith("inventory:rune:")
+
+
+def test_equipment_shows_name_without_zero_enhancement_and_with_real_enhancement():
+    plain = InventoryEntry(
+        kind="equipment", key=str(uuid4()), title="Adaga", rarity="Comum", slot="main_hand",
+        payload={"enhancement": 0},
+    )
+    refined = InventoryEntry(
+        kind="equipment", key=str(uuid4()), title="Espada Curta", rarity="Raro", slot="main_hand",
+        payload={"enhancement": 1},
+    )
+    screen = render_inventory(_category_view("equipment", (plain, refined)))
+    assert "#1 ⚪️ <b>Adaga</b>" in screen.text and "+0" not in screen.text
+    assert "#2 🔵 <b>Espada Curta +1</b>" in screen.text
+
+
+def _pending_view(entries, pending_count=None, blocked=0):
+    return InventoryView(
+        "pending_root", uuid4(), used_slots=60, entries=entries,
+        pending_count=len(entries) if pending_count is None else pending_count,
+        blocked_delivery_count=blocked,
+    )
+
+
+def test_pending_deliveries_use_the_approved_layout_and_claim_buttons():
+    entries = (
+        InventoryEntry(kind="material", key="pending-1", title="Ferro de Fuligem", quantity=7,
+                       payload={"material_id": "material.tdo.ferro_de_fuligem"}),
+        InventoryEntry(kind="consumable", key="pending-2", title="Poção de Cura", quantity=4,
+                       payload={"consumable_id": next(iter(CONSUMABLE_CATALOG))}),
+    )
+    screen = render_inventory(_pending_view(entries))
+    assert screen.text.startswith("<b>📦 Entregas Pendentes</b>\n\n<i>Itens recebidos")
+    assert "🗳️ <b>Espaço</b> · <code>2/20</code>" in screen.text
+    assert "📄 <b>Página</b> · <code>1/1</code>" in screen.text
+    assert "#1 🧱 <b>Ferro de Fuligem</b> · <code>×7</code>\n✨ <code>Grau I</code>" in screen.text
+    assert "Origem" not in screen.text and "⚠️" not in screen.text
+    assert _rows(screen) == [["1️⃣", "2️⃣"], ["↩️ Retornar"]]
+    assert _callbacks(screen) == ["pending:claim:pending1", "pending:claim:pending2", "inventory:root"]  # noqa: E501
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 4, 5, 6])
+def test_pending_numeric_rows_follow_the_distribution(count):
+    entries = tuple(
+        InventoryEntry(kind="material", key=f"pending-{n}", title="Ferro", quantity=1)
+        for n in range(count)
+    )
+    sizes = [len(row) for row in _numbered(render_inventory(_pending_view(entries)))]
+    assert sizes == numeric_row_sizes(count)
+
+
+def test_pending_paginates_and_keeps_capacity():
+    entries = tuple(
+        InventoryEntry(kind="material", key=f"pending-{n}", title="Ferro", quantity=1)
+        for n in range(20)
+    )
+    view = _pending_view(entries)
+    first = render_inventory(view)
+    assert "<code>20/20</code>" in first.text
+    assert "📄 <b>Página</b> · <code>1/4</code>" in first.text
+    assert "pending:root:1" in _callbacks(first)
+    assert _rows(first)[-2:] == [["▶️ Próxima"], ["↩️ Retornar"]]
+
+
+def test_blocked_deliveries_stay_visible_and_only_expose_retry():
+    entries = (
+        InventoryEntry(
+            kind="blocked_delivery", key="blocked-1", title="Guarda da Câmara", rarity="Épico",
+            slot="main_hand", item_level=30, bound=True,
+            payload={"delivery_kind": "equipment", "enhancement": 2, "origin": "mission:P18:choice"},  # noqa: E501
+        ),
+    )
+    screen = render_inventory(_pending_view(entries, pending_count=20, blocked=1))
+    assert "⚠️ <b>Entregas aguardando espaço</b> · <code>1</code>" in screen.text
+    assert "#1 ⚠️ 🟣 <b>Guarda da Câmara +2</b>" in screen.text
+    assert "mission:P18:choice" not in screen.text
+    assert _callbacks(screen) == ["pending:retry", "inventory:root"]
+
+
+def _warehouse_view(entries, kind="warehouse_root", **extra):
+    from asterion.application.warehouse import WarehouseView
+
+    return WarehouseView(kind, uuid4(), True, "Refúgio do Ocaso", 8, len(entries), tuple(entries), **extra)  # noqa: E501
+
+
+def test_warehouse_uses_the_approved_layout_and_withdraw_buttons():
+    from asterion.application.warehouse import WarehouseEntry
+    from asterion.bot.warehouse_ui import render_warehouse
+
+    entries = [
+        WarehouseEntry(id=str(uuid4()), kind="material", title="Ferro de Fuligem", quantity=7,
+                       payload={"material_id": "material.tdo.ferro_de_fuligem"}),
+        WarehouseEntry(id=str(uuid4()), kind="rune", title="Runa Cinérea", quantity=2,
+                       rarity="Comum", grade=1),
+    ]
+    screen = render_warehouse(_warehouse_view(entries))
+    assert screen.text.startswith("<b>🗄️ Armazém</b>\n\n<i>Itens armazenados permanecem")
+    assert "🗳️ <b>Espaço</b> · <code>2/100</code>" in screen.text
+    assert "📄 <b>Página</b> · <code>1/1</code>" in screen.text
+    assert "#1 🧱 <b>Ferro de Fuligem</b> · <code>×7</code>\n✨ <code>Grau I</code>" in screen.text
+    assert "#2 🔷 <b>Runa Cinérea</b> · <code>×2</code>\n⚪️ <code>Grau I</code>" in screen.text
+    assert "Braseiro" not in screen.text
+    callbacks = _callbacks(screen)
+    assert callbacks[0].startswith("warehouse:withdraw:material:")
+    assert callbacks[1].startswith("warehouse:withdraw:rune:")
+    assert "warehouse:store" in callbacks and callbacks[-1] == "inventory:root"
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 4, 5, 6])
+def test_warehouse_numeric_rows_follow_the_distribution(count):
+    from asterion.bot.warehouse_ui import render_warehouse
+
+    screen = render_warehouse(_warehouse_view(_warehouse_entries(count, kind="material", title="Ferro")))  # noqa: E501
+    assert [len(row) for row in _numbered(screen)] == numeric_row_sizes(count)
+
+
+def test_warehouse_paginates_every_item_with_nav_above_return():
+    from asterion.bot.warehouse_ui import render_warehouse
+
+    view = _warehouse_view(_warehouse_entries(100))
+    withdraw = []
+    for page in range(17):
+        screen = render_warehouse(view, page)
+        assert len(screen.text) <= 4096
+        assert f"📄 <b>Página</b> · <code>{page + 1}/17</code>" in screen.text
+        withdraw.extend(c for c in _callbacks(screen) if c.startswith("warehouse:withdraw:"))
+    assert len(set(withdraw)) == 100
+    first, second, last = (render_warehouse(view, page) for page in (0, 1, 16))
+    assert "warehouse:page:1" in _callbacks(first)
+    assert {"warehouse:page:0", "warehouse:page:2"} <= set(_callbacks(second))
+    assert "warehouse:page:17" not in _callbacks(last)
+    assert _rows(second)[-2:] == [["◀️ Anterior", "▶️ Próxima"], ["↩️ Retornar"]]
+    assert render_warehouse(view, 99).text == last.text
+
+
+def test_warehouse_sources_keep_deposit_buttons_and_explain_unavailable_items():
+    from asterion.bot.warehouse_ui import render_warehouse, render_warehouse_store_menu
+
+    entries = _warehouse_entries(59) + _warehouse_entries(1, eligible=False, reason="EQUIPPED")
+    view = _warehouse_view(entries, "warehouse_inventory_sources", item_kind="equipment")
+    first, last = render_warehouse(view), render_warehouse(view, 9)
+    assert "warehouse:inventory:equipment:1" in _callbacks(first)
+    assert any(c.startswith("warehouse:deposit:equipment:") for c in _callbacks(first))
+    assert "Equipado" in last.text and "EQUIPPED" not in last.text
+    assert _callbacks(last)[5] == "warehouse:inventory:equipment"  # item indisponível não deposita
+    assert _callbacks(last)[-1] == "warehouse:store"
+    menu = render_warehouse_store_menu()
+    assert {"warehouse:inventory:equipment", "warehouse:inventory:consumable",
+            "warehouse:inventory:material", "warehouse:inventory:rune"} <= set(_callbacks(menu))

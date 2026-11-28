@@ -864,6 +864,15 @@ class WarehouseService:
                 bool(getattr(row, "bound", False)),
                 rarity=getattr(row, "rarity", None),
                 grade=_stack_grade(kind, row),
+                payload={
+                    key: getattr(row, column)
+                    for key, column in (
+                        ("consumable_id", "consumable_id"),
+                        ("material_id", "material_id"),
+                    )
+                    if hasattr(row, column)
+                }
+                or None,
             )
             for row in rows
         ]

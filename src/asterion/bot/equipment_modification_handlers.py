@@ -27,6 +27,7 @@ from asterion.bot.equipment_modification_ui import (
     render_runes,
 )
 from asterion.bot.equipment_ui import render_equipment_detail
+from asterion.bot.forge_ui import render_forge_item, render_forge_list
 from asterion.bot.inventory_ui import render_inventory
 
 
@@ -59,11 +60,45 @@ def equipment_modification_router(
             await present(query.message, render_inventory(category), images, edit=True)
 
     async def show_inventory(query: CallbackQuery) -> None:
+        """Após desmontar, volta à lista da Forja (o item deixou de existir)."""
+        await show_forge_list(query)
+
+    async def show_forge_list(query: CallbackQuery, page: int = 0) -> None:
         if not isinstance(query.message, Message):
             return
         category = await inventory.category(query.from_user.id, "equipment")
         if category is not None:
-            await present(query.message, render_inventory(category), images, edit=True)
+            await present(
+                query.message, render_forge_list(category.entries, page), images, edit=True
+            )
+
+    async def show_forge_item(query: CallbackQuery, item_id: UUID) -> None:
+        if not isinstance(query.message, Message):
+            return
+        try:
+            detail = await read_service.detail(query.from_user.id, item_id)
+        except EquipmentViewUnavailable:
+            detail = None
+        if detail is None:
+            await show_forge_list(query)
+            return
+        await present(query.message, render_forge_item(detail), images, edit=True)
+
+    @router.callback_query(F.data.startswith("forge:root"))
+    async def forge_root(query: CallbackQuery) -> None:
+        await query.answer()
+        token = (query.data or "").rsplit(":", 1)[-1]
+        await show_forge_list(query, int(token) if token.isdecimal() else 0)
+
+    @router.callback_query(F.data.startswith("forge:i:"))
+    async def forge_item(query: CallbackQuery) -> None:
+        await query.answer()
+        try:
+            item_id = UUID(hex=(query.data or "").removeprefix("forge:i:"))
+        except ValueError:
+            await show_forge_list(query)
+            return
+        await show_forge_item(query, item_id)
 
     def _versions(view, item_version: int, configuration_version: int) -> bool:
         return (
@@ -122,7 +157,7 @@ def equipment_modification_router(
                     expected_configuration_version=int(raw[4]),
                 )
                 await query.answer()
-                await show_detail(query, item_id)
+                await show_forge_item(query, item_id)
                 return
             elif operation == "r" and len(raw) in {3, 4}:
                 affinity = raw[3] if len(raw) == 4 else "A"
@@ -141,7 +176,7 @@ def equipment_modification_router(
                 candidate = _rune_candidate(listing, raw[4], item_version, configuration_version)
                 if candidate is None:
                     await query.answer("Estado atualizado.", show_alert=True)
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
                 stack_id = UUID(str(candidate["stack_id"]))
                 if operation == "rp":
@@ -159,7 +194,7 @@ def equipment_modification_router(
                         expected_configuration_version=configuration_version,
                     )
                     await query.answer()
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
             elif operation == "rr" and len(raw) == 6:
                 affinity = raw[3]
@@ -173,7 +208,7 @@ def equipment_modification_router(
                     expected_configuration_version=int(raw[5]),
                 )
                 await query.answer()
-                await show_detail(query, item_id)
+                await show_forge_item(query, item_id)
                 return
             elif operation == "e" and len(raw) == 3:
                 view = await service.enchantments(actor, item_id)
@@ -186,7 +221,7 @@ def equipment_modification_router(
                 candidate = await _candidate(listing, index, item_version, configuration_version)
                 if candidate is None:
                     await query.answer("Estado atualizado.", show_alert=True)
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
                 recipe_id = candidate["recipe_id"]
                 if operation == "ep":
@@ -204,7 +239,7 @@ def equipment_modification_router(
                         expected_preview_token=raw[6],
                     )
                     await query.answer()
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
             elif operation == "l" and len(raw) == 3:
                 detail = await read_service.detail(actor, item_id)
@@ -216,8 +251,9 @@ def equipment_modification_router(
                 detail = await read_service.detail(actor, item_id)
                 if detail is None or not _versions(detail, item_version, configuration_version):
                     await query.answer("Estado atualizado.", show_alert=True)
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
+                # favorite/lock ficam na tela de detalhe do equipamento.
                 if operation == "lp":
                     view = await service.reroll_preview(actor, item_id, index)
                     if view is None:
@@ -232,7 +268,7 @@ def equipment_modification_router(
                         expected_configuration_version=configuration_version,
                     )
                     await query.answer()
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
             elif operation == "d" and len(raw) == 3:
                 view = await service.dismantle_preview(actor, item_id)
@@ -246,7 +282,7 @@ def equipment_modification_router(
                     raise ValueError("Unknown item")
                 if not _versions(view, item_version, configuration_version):
                     await query.answer("Estado atualizado.", show_alert=True)
-                    await show_detail(query, item_id)
+                    await show_forge_item(query, item_id)
                     return
                 if operation == "dm" and len(raw) == 5:
                     screen = render_dismantle_preview(view, reinforced=True)
@@ -270,6 +306,7 @@ def equipment_modification_router(
                     await query.answer("Estado atualizado.", show_alert=True)
                     await show_detail(query, item_id)
                     return
+                # favorite/lock ficam na tela de detalhe do equipamento.
                 if operation == "f":
                     await service.set_favorite(
                         actor,
@@ -300,7 +337,7 @@ def equipment_modification_router(
             await query.answer("Equipamento indisponível.", show_alert=True)
             if len(raw) > 2:
                 try:
-                    await show_detail(query, UUID(hex=raw[2]))
+                    await show_forge_item(query, UUID(hex=raw[2]))
                 except ValueError:
                     pass
         except CombatConfigurationLocked:
@@ -308,10 +345,10 @@ def equipment_modification_router(
                 "Equipamentos não podem ser alterados durante esta atividade.",
                 show_alert=True,
             )
-            await show_detail(query, item_id)
+            await show_forge_item(query, item_id)
         except EquipmentModificationRejected as exc:
             message = "Estado atualizado." if str(exc.code) == "STALE" else "Operação indisponível."
             await query.answer(message, show_alert=True)
-            await show_detail(query, item_id)
+            await show_forge_item(query, item_id)
 
     return router

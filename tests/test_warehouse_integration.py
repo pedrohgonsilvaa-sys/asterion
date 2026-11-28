@@ -17,7 +17,6 @@ from asterion.application.inventory_capacity import (
 )
 from asterion.application.warehouse import WarehouseRejected, WarehouseService
 from asterion.application.world import WorldService
-from asterion.bot.inventory_ui import render_inventory
 from asterion.bot.warehouse_ui import render_warehouse
 from asterion.bot.world_handlers import world_router
 from asterion.infrastructure.db.models import (
@@ -646,8 +645,8 @@ async def test_page_buttons_open_later_items_with_player_names(database):
 
     await dispatcher.feed_raw_update(bot, callback_update("warehouse:page:1", actor=actor))
     root = bot.session.make_request.call_args.args[1]
-    assert "Página 2/2" in root.text
-    assert f"16. {label} · 5" in root.text
+    assert "📄 <b>Página</b> · <code>2/3</code>" in root.text
+    assert f"<b>{label}</b> · <code>×5</code>" in root.text
     assert material_id not in root.text
 
     await dispatcher.feed_raw_update(
@@ -655,8 +654,8 @@ async def test_page_buttons_open_later_items_with_player_names(database):
     )
     sources = bot.session.make_request.call_args.args[1]
     assert "Materiais disponíveis para guardar" in sources.text
-    assert "Página 2/2" in sources.text
-    assert f"16. {label} · 5" in sources.text
+    assert "📄 <b>Página</b> · <code>2/3</code>" in sources.text
+    assert f"<b>{label}</b> · <code>×5</code>" in sources.text
 
 
 
@@ -1026,12 +1025,7 @@ async def test_telegram_buttons_store_and_return_a_rune_from_inventory(database)
     async with sessions.begin() as session:
         session.add(_rune(RuneStack, character_id, row_id=stack_id))
 
-    inventory = await InventoryService(sessions, "ocaso").category(actor, "runes")
-    screen = render_inventory(inventory)
     deposit = f"warehouse:deposit:rune:{stack_id.hex}"
-    assert deposit in [
-        button.callback_data for row in screen.keyboard.inline_keyboard for button in row
-    ]
 
     bot = Bot("123456:local-test-token")
     bot.session.make_request = AsyncMock(return_value=True)
@@ -1061,12 +1055,18 @@ async def test_telegram_buttons_store_and_return_a_rune_from_inventory(database)
             if item.callback_data.startswith(prefix)
         )
 
+    store = await click("warehouse:store")
+    assert "warehouse:inventory:rune" in [
+        b.callback_data for row in store.reply_markup.inline_keyboard for b in row
+    ]
+    sources = await click("warehouse:inventory:rune")
+    assert deposit in [b.callback_data for row in sources.reply_markup.inline_keyboard for b in row]
     choice = await click(deposit)
     assert "Disponível · 4" in choice.text
     preview = await click(button(choice, "warehouse:go:"))
     assert "Runa de Brasa" in preview.text
     root = await click(button(preview, "warehouse:confirm:"))
-    assert "Runa de Brasa · 4" in root.text and "Grau 2" in root.text
+    assert "<b>Runa de Brasa</b> · <code>×4</code>" in root.text and "Grau II" in root.text
 
     choice = await click(button(root, "warehouse:withdraw:rune:"))
     preview = await click(button(choice, "warehouse:go:"))
@@ -1107,7 +1107,7 @@ async def test_protected_equipment_can_be_stored_and_stays_protected(database):
         stored = await session.get(WarehouseEquipmentItem, item_id)
         assert stored.payload == {"locked": True, "favorite": True}
     root = await service.root(actor)
-    assert "🔒 Protegido" in render_warehouse(root).text
+    assert "<b>Lâmina Protegida</b>" in render_warehouse(root).text
 
     assert (await _move(service, actor, "withdraw", "equipment", item_id)).status == "COMMITTED"
     async with sessions() as session:
@@ -1584,16 +1584,16 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
         bot, callback_update("inventory:category:materials", actor=actor)
     )
     first = bot.session.make_request.call_args.args[1]
-    # Materiais (Parte I §5): 5 por página, 16 pilhas → 4 páginas.
-    assert first.text.count("Couro Escoriado") == 5
+    # UI aprovada: 6 por página, 16 pilhas → 3 páginas.
+    assert first.text.count("Couro Escoriado") == 6
     labels = [b.text for row in first.reply_markup.inline_keyboard for b in row]
     assert "▶️ Próxima" in labels and "◀️ Anterior" not in labels
 
     await dispatcher.feed_raw_update(
-        bot, callback_update("inventory:category:materials:3", update_id=3, actor=actor)
+        bot, callback_update("inventory:category:materials:2", update_id=3, actor=actor)
     )
     last = bot.session.make_request.call_args.args[1]
-    assert last.text.count("Couro Escoriado") == 1
+    assert last.text.count("Couro Escoriado") == 4
     detail = next(
         b.callback_data
         for row in last.reply_markup.inline_keyboard
@@ -1608,7 +1608,7 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
     labels = [b.text for row in material.reply_markup.inline_keyboard for b in row]
     assert labels == ["📦 Guardar", "↩️ Retornar"]
     assert material.reply_markup.inline_keyboard[-1][0].callback_data == (
-        "inventory:category:materials:3"
+        "inventory:category:materials"
     )
 
 
@@ -1637,3 +1637,69 @@ async def test_cancel_still_works_while_an_activity_locks_transfers(database, mo
         stack = await session.get(MaterialStack, stack_id)
     assert operation.status == "cancelled"
     assert stack.quantity == 5
+
+
+@pytest.mark.asyncio
+async def test_pending_deliveries_screen_lists_claims_by_number_and_pages(database):
+    """UI aprovada: Entregas Pendentes lista, pagina e resgata pelo botão numérico."""
+    actor, _ = await _seed_road(database, 781095)
+    sessions = database[1]
+    character_id = await _character_id(sessions, actor)
+    async with sessions.begin() as session:
+        session.add_all(
+            PendingItem(
+                id=uuid4(),
+                character_id=character_id,
+                source_key=f"reward:mission:ui:{number}",
+                kind="material",
+                payload={"material_id": "material.tdo.ferro_de_fuligem"},
+                quantity=3,
+            )
+            for number in range(8)
+        )
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(sessions, "ocaso"),
+            {},
+            inventory=InventoryService(sessions, "ocaso"),
+            warehouse=WarehouseService(sessions, "ocaso"),
+        )
+    )
+    update_id = 20
+
+    async def click(data):
+        nonlocal update_id
+        update_id += 1
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, update_id=update_id, actor=actor)
+        )
+        return bot.session.make_request.call_args.args[1]
+
+    def callbacks(sent):
+        return [b.callback_data for row in sent.reply_markup.inline_keyboard for b in row]
+
+    first = await click("pending:root")
+    assert first.text.startswith("<b>📦 Entregas Pendentes</b>")
+    assert "🗳️ <b>Espaço</b> · <code>8/20</code>" in first.text
+    assert "📄 <b>Página</b> · <code>1/2</code>" in first.text
+    assert "#1 🧱 <b>Ferro de Fuligem</b> · <code>×3</code>\n✨ <code>Grau I</code>" in first.text  # noqa: E501
+    assert [len(row) for row in first.reply_markup.inline_keyboard[:2]] == [3, 3]
+    assert "pending:root:1" in callbacks(first)
+
+    second = await click("pending:root:1")
+    assert "📄 <b>Página</b> · <code>2/2</code>" in second.text
+    assert second.text.count("#") == 2 and "pending:root:0" in callbacks(second)
+
+    claim = next(data for data in callbacks(first) if data.startswith("pending:claim:"))
+    preview = await click(claim)
+    assert "Resgatar Entrega Pendente" in preview.text
+    confirm = next(data for data in callbacks(preview) if data.startswith("warehouse:confirm:"))
+    after = await click(confirm)
+    assert "<code>7/20</code>" in after.text and "📦 Entregas Pendentes" in after.text
+    async with sessions() as session:
+        stacks = (await session.scalars(select(MaterialStack))).all()
+        assert sum(row.quantity for row in stacks) == 3

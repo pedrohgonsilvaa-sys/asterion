@@ -51,7 +51,7 @@ REGIONAL_RUNE_TITLES = {
     "Válvula": "Runa da Válvula",
 }
 
-VALID_CATEGORIES = ("equipment", "consumables", "materials", "runes")
+VALID_CATEGORIES = ("all", "equipment", "consumables", "materials", "runes")
 
 MATERIAL_LABELS = {
     "material.tdo.ferro_de_fuligem": "Ferro de Fuligem",
@@ -381,6 +381,11 @@ class InventoryService:
         character_id: UUID,
         category: str,
     ) -> list[InventoryEntry]:
+        if category == "all":
+            entries: list[InventoryEntry] = []
+            for part in ("equipment", "consumables", "materials", "runes"):
+                entries.extend(await self._entries(session, character_id, part))
+            return entries
         if category == "equipment":
             rows = (
                 await session.scalars(

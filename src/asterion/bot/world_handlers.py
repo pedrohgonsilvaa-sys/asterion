@@ -125,7 +125,12 @@ from asterion.bot.creation_handlers import present
 from asterion.bot.creation_ui import Screen
 from asterion.bot.dungeon_ui import render_dungeons
 from asterion.bot.flavor_ui import with_region_flavor
-from asterion.bot.inventory_ui import material_source, render_inventory, render_material_detail
+from asterion.bot.inventory_ui import (
+    material_source,
+    render_inventory,
+    render_material_detail,
+    render_rune_detail,
+)
 from asterion.bot.map_ui import TDO_LOCAL_BY_KEY as TDO_MAP_LOCALS
 from asterion.bot.map_ui import render_map as render_map_screen
 from asterion.bot.map_ui import render_tdo_local as render_tdo_map_local
@@ -1666,7 +1671,8 @@ def world_router(
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
-        view = await inventory.root(query.from_user.id)
+        # UI aprovada: o Inventário abre direto na listagem (filtro Todos).
+        view = await inventory.category(query.from_user.id, "all")
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 
@@ -1713,6 +1719,20 @@ def world_router(
         )
         await present(query.message, screen, images, edit=True)
 
+    @router.callback_query(F.data.startswith("inventory:rune:"))
+    async def inventory_rune(query: CallbackQuery):
+        """Detalhe mínimo da Runa (sem ações de Forja)."""
+        await query.answer()
+        if inventory is None or not isinstance(query.message, Message):
+            return
+        source = (query.data or "").removeprefix("inventory:rune:")
+        view = await inventory.category(query.from_user.id, "runes")
+        if view is None:
+            return
+        entry = next((item for item in view.entries if material_source(item) == source), None)
+        screen = render_rune_detail(entry) if entry is not None else render_inventory(view)
+        await present(query.message, screen, images, edit=True)
+
     @router.callback_query(F.data == "warehouse:root")
     @router.callback_query(F.data == "warehouse:root:refuge")
     @router.callback_query(F.data == "warehouse:root:market")
@@ -1728,6 +1748,15 @@ def world_router(
         if view is not None:
             screen = warehouse_screen(query.from_user.id, view, _callback_page(query.data))
             await present(query.message, screen, images, edit=True)
+
+    @router.callback_query(F.data == "warehouse:store")
+    async def warehouse_store_menu(query: CallbackQuery):
+        await query.answer()
+        if not isinstance(query.message, Message):
+            return
+        from asterion.bot.warehouse_ui import render_warehouse_store_menu
+
+        await present(query.message, render_warehouse_store_menu(), images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:inventory:"))
     async def warehouse_inventory_list(query: CallbackQuery):
@@ -1897,14 +1926,15 @@ def world_router(
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 
-    @router.callback_query(F.data == "pending:root")
+    @router.callback_query(F.data.startswith("pending:root"))
     async def pending_root(query: CallbackQuery):
         await query.answer()
         if inventory is None or not isinstance(query.message, Message):
             return
         view = await inventory.pending(query.from_user.id)
         if view is not None:
-            await present(query.message, render_inventory(view), images, edit=True)
+            screen = render_inventory(view, _callback_page(query.data))
+            await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("pending:claim:"))
     async def pending_claim(query: CallbackQuery):

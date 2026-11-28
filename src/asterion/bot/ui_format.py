@@ -185,3 +185,27 @@ def page_nav(page: int, pages: int, callback) -> list[InlineKeyboardButton]:
     if page < pages - 1:
         row.append(button(NEXT_LABEL, callback(page + 1)))
     return row
+
+
+# UI aprovada (Inventário, Entregas Pendentes e Armazém): botões numéricos se adaptam
+# à quantidade de itens da página: 1, 2, 3 → uma fila; 4 → 2×2; 5 → 3+2; 6 → 3+3.
+def numeric_row_sizes(count: int) -> list[int]:
+    """Tamanho de cada fila de botões numéricos, equilibrada e com no máximo 3 por fila."""
+    if count <= 0:
+        return []
+    if count <= 3:
+        return [count]
+    if count == 4:
+        return [2, 2]
+    rows = -(-count // 3)
+    base, extra = divmod(count, rows)
+    return [base + 1 if index < extra else base for index in range(rows)]
+
+
+def numeric_rows(buttons: list[InlineKeyboardButton]) -> list[list[InlineKeyboardButton]]:
+    """Distribui os botões numéricos nas filas de ``numeric_row_sizes``."""
+    rows, start = [], 0
+    for size in numeric_row_sizes(len(buttons)):
+        rows.append(buttons[start : start + size])
+        start += size
+    return rows
