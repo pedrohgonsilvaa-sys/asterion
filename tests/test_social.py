@@ -134,13 +134,16 @@ async def test_public_profile_hides_identity_and_empty_story(database):
 @pytest.mark.asyncio
 async def test_history_limit_links_and_removal(database):
     ids = await _seed(database)
-    assert MAX_HISTORY_CHARACTERS == 600
+    assert MAX_HISTORY_CHARACTERS == 1200
     surfaces = CharacterSurfacesService(database[1], SERVER)
     assert await surfaces.begin_history_input(ANA, 0, 7001)
+    assert await surfaces.save_history_title(ANA, 7001, "Cinzas") == "title_saved"
     for bad in ("veja https://exemplo.com", "fale com @fulano_x", "acesse t.me/grupo"):
-        assert await surfaces.save_history(ANA, 7001, bad) == HistoryInputResult.FORBIDDEN
-    assert await surfaces.save_history(ANA, 7001, "x" * 601) == HistoryInputResult.TOO_LONG
-    assert await surfaces.save_history(ANA, 7001, "x" * 600) == HistoryInputResult.SAVED
+        padded = bad + " x" * 300
+        assert await surfaces.save_history(ANA, 7001, padded) == HistoryInputResult.FORBIDDEN
+    assert await surfaces.save_history(ANA, 7001, "x" * 1201) == HistoryInputResult.TOO_LONG
+    assert await surfaces.save_history(ANA, 7001, "x" * 599) == HistoryInputResult.TOO_SHORT
+    assert await surfaces.save_history(ANA, 7001, "x" * 1200) == HistoryInputResult.SAVED
     assert not await surfaces.remove_history(ANA, 0)
     assert await surfaces.remove_history(ANA, 1)
     assert (await surfaces.profile(ANA)).history is None

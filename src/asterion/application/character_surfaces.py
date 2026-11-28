@@ -33,7 +33,13 @@ from asterion.application.tdo_feats import reconcile_tdo_feats
 from asterion.application.vigor import reconcile_character_vigor
 from asterion.domain.flagelos import REGIONS as FLAGELO_REGIONS
 from asterion.domain.road import creature_for
-from asterion.domain.social import MAX_STORY_CHARACTERS, story_is_allowed
+from asterion.domain.social import (
+    MAX_STORY_CHARACTERS,
+    MAX_STORY_TITLE_CHARACTERS,
+    MIN_STORY_CHARACTERS,
+    MIN_STORY_TITLE_CHARACTERS,
+    story_is_allowed,
+)
 from asterion.domain.veu_bestiary import VEU_CREATURES
 from asterion.infrastructure.db.models import (
     Achievement,
@@ -52,6 +58,9 @@ from asterion.infrastructure.db.models import (
 )
 
 MAX_HISTORY_CHARACTERS = MAX_STORY_CHARACTERS  # §49.18
+MIN_HISTORY_CHARACTERS = MIN_STORY_CHARACTERS
+MIN_HISTORY_TITLE_CHARACTERS = MIN_STORY_TITLE_CHARACTERS
+MAX_HISTORY_TITLE_CHARACTERS = MAX_STORY_TITLE_CHARACTERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +106,9 @@ class ProfileView:
     history: str | None
     revision: int
     selected_title: str | None = None
+    history_title: str | None = None
+    # Escrita em duas etapas: sem título enviado ainda → "title"; com título → "story".
+    history_step: str = "title"
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +204,8 @@ class HistoryInputResult:
     SAVED = "saved"
     STALE = "stale"
     TOO_LONG = "too_long"
+    TOO_SHORT = "too_short"
+    TITLE_SAVED = "title_saved"
     EMPTY = "empty"
     FORBIDDEN = "forbidden"
     MISSING_CHARACTER = "missing_character"
@@ -331,6 +345,7 @@ class CharacterSurfacesService:
                 lease.prompt_message_id = prompt_message_id
                 lease.updated_at = datetime.now(UTC)
             profile.history_prompt_message_id = prompt_message_id
+            profile.history_title_draft = None
             profile.updated_at = datetime.now(UTC)
             return True
 
@@ -348,6 +363,7 @@ class CharacterSurfacesService:
                 history_cleared = False
             else:
                 profile.history_prompt_message_id = None
+                profile.history_title_draft = None
                 profile.updated_at = datetime.now(UTC)
                 history_cleared = True
             lease = await session.scalar(
@@ -377,46 +393,90 @@ class CharacterSurfacesService:
             if profile is None or profile.revision != expected_revision:
                 return False
             profile.history = None
+            profile.history_title = None
             profile.revision += 1
             profile.updated_at = datetime.now(UTC)
             return True
 
+    async def save_history_title(
+        self, actor_id: int, prompt_message_id: int, raw_text: str
+    ) -> str:
+        """Primeira etapa: guarda o título (5 a 16 caracteres) e segue para a História."""
+        text = _clean_title(raw_text)
+        if not text:
+            return HistoryInputResult.EMPTY
+        if len(text) > MAX_HISTORY_TITLE_CHARACTERS:
+            return HistoryInputResult.TOO_LONG
+        if len(text) < MIN_HISTORY_TITLE_CHARACTERS:
+            return HistoryInputResult.TOO_SHORT
+        if not story_is_allowed(text):
+            return HistoryInputResult.FORBIDDEN
+        async with self.sessions.begin() as session:
+            profile = await self._locked_prompt_profile(session, actor_id, prompt_message_id)
+            if isinstance(profile, str):
+                return profile
+            profile.history_title_draft = text
+            profile.updated_at = datetime.now(UTC)
+            return HistoryInputResult.TITLE_SAVED
+
     async def save_history(self, actor_id: int, prompt_message_id: int, raw_text: str) -> str:
+        """Segunda etapa: grava título + História (600 a 1.200 caracteres)."""
         text = _clean_history(raw_text)
         if not text:
             return HistoryInputResult.EMPTY
         if len(text) > MAX_HISTORY_CHARACTERS:
             return HistoryInputResult.TOO_LONG
+        if len(text) < MIN_HISTORY_CHARACTERS:
+            return HistoryInputResult.TOO_SHORT
         if not story_is_allowed(text):
             return HistoryInputResult.FORBIDDEN
         async with self.sessions.begin() as session:
-            character = await self._character(session, actor_id, lock=True)
-            if character is None:
-                return HistoryInputResult.MISSING_CHARACTER
-            profile = await session.scalar(
-                select(CharacterProfile)
-                .where(CharacterProfile.character_id == character.id)
-                .with_for_update()
-            )
-            if profile is None or profile.history_prompt_message_id != prompt_message_id:
-                return HistoryInputResult.STALE
-            lease = await session.scalar(
-                select(CharacterPendingInput)
-                .where(
-                    CharacterPendingInput.character_id == character.id,
-                    CharacterPendingInput.input_kind == "history",
-                    CharacterPendingInput.prompt_message_id == prompt_message_id,
-                )
-                .with_for_update()
-            )
-            if lease is None:
+            profile = await self._locked_prompt_profile(session, actor_id, prompt_message_id)
+            if isinstance(profile, str):
+                return profile
+            if profile.history_title_draft is None:
                 return HistoryInputResult.STALE
             profile.history = text
+            profile.history_title = profile.history_title_draft
+            profile.history_title_draft = None
             profile.revision += 1
             profile.history_prompt_message_id = None
             profile.updated_at = datetime.now(UTC)
-            await session.delete(lease)
+            lease = await session.scalar(
+                select(CharacterPendingInput).where(
+                    CharacterPendingInput.character_id == profile.character_id,
+                    CharacterPendingInput.input_kind == "history",
+                )
+            )
+            if lease is not None:
+                await session.delete(lease)
             return HistoryInputResult.SAVED
+
+    async def _locked_prompt_profile(
+        self, session: AsyncSession, actor_id: int, prompt_message_id: int
+    ) -> CharacterProfile | str:
+        character = await self._character(session, actor_id, lock=True)
+        if character is None:
+            return HistoryInputResult.MISSING_CHARACTER
+        profile = await session.scalar(
+            select(CharacterProfile)
+            .where(CharacterProfile.character_id == character.id)
+            .with_for_update()
+        )
+        if profile is None or profile.history_prompt_message_id != prompt_message_id:
+            return HistoryInputResult.STALE
+        lease = await session.scalar(
+            select(CharacterPendingInput)
+            .where(
+                CharacterPendingInput.character_id == character.id,
+                CharacterPendingInput.input_kind == "history",
+                CharacterPendingInput.prompt_message_id == prompt_message_id,
+            )
+            .with_for_update()
+        )
+        if lease is None:
+            return HistoryInputResult.STALE
+        return profile
 
     async def knowledge(self, actor_id: int) -> KnowledgeView | None:
         async with self.sessions.begin() as session:
@@ -626,7 +686,18 @@ class CharacterSurfacesService:
             history=profile.history if profile else None,
             revision=profile.revision if profile else 0,
             selected_title=selected_title,
+            history_title=profile.history_title if profile else None,
+            history_step=(
+                "story" if profile is not None and profile.history_title_draft else "title"
+            ),
         )
+
+
+def _clean_title(raw_text: str) -> str:
+    normalized = unicodedata.normalize("NFC", raw_text)
+    return " ".join(
+        "".join(char for char in normalized if unicodedata.category(char) != "Cc").split()
+    )
 
 
 def _clean_history(raw_text: str) -> str:

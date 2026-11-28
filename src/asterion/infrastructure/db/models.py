@@ -734,12 +734,23 @@ class CharacterProfile(Base):
             "history_prompt_message_id IS NULL OR history_prompt_message_id > 0",
             name="ck_character_profile_prompt_message_id",
         ),
+        CheckConstraint(
+            "history_title IS NULL OR char_length(history_title) BETWEEN 5 AND 16",
+            name="ck_character_profile_history_title_length",
+        ),
+        CheckConstraint(
+            "history_title_draft IS NULL OR char_length(history_title_draft) BETWEEN 5 AND 16",
+            name="ck_character_profile_history_title_draft_length",
+        ),
     )
 
     character_id: Mapped[UUID] = mapped_column(
         ForeignKey("characters.id", ondelete="CASCADE"), primary_key=True
     )
     history: Mapped[str | None] = mapped_column(Text)
+    history_title: Mapped[str | None] = mapped_column(String(16))
+    # Título já enviado enquanto a História ainda não foi escrita (segunda etapa do fluxo).
+    history_title_draft: Mapped[str | None] = mapped_column(String(16))
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     history_prompt_message_id: Mapped[int | None] = mapped_column(BigInteger)
     updated_at: Mapped[datetime] = mapped_column(

@@ -14,7 +14,10 @@ RECENT_WINDOW = timedelta(days=14)
 MAX_BLOCKED = 100
 SEARCH_LIMIT_PER_MINUTE = 20
 SEARCH_WINDOW = timedelta(minutes=1)
-MAX_STORY_CHARACTERS = 600
+MIN_STORY_CHARACTERS = 600
+MAX_STORY_CHARACTERS = 1200
+MIN_STORY_TITLE_CHARACTERS = 5
+MAX_STORY_TITLE_CHARACTERS = 16
 STORY_SHARE_COOLDOWN = timedelta(hours=6)
 
 # Not game values: how many rows one Telegram screen shows and how short a name

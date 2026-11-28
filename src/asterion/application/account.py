@@ -618,6 +618,7 @@ class AccountService:
             history_pending = profile is not None and profile.history_prompt_message_id is not None
             if profile is not None and history_pending:
                 profile.history_prompt_message_id = None
+                profile.history_title_draft = None
                 profile.updated_at = utc_now()
             doctrine_input = await session.get(CharacterDoctrineInput, character.id)
             account_input = await session.get(CharacterAccountInput, character.id)
@@ -742,6 +743,7 @@ class AccountService:
                     profile = await session.get(CharacterProfile, character.id)
                     if profile is not None:
                         profile.history_prompt_message_id = None
+                        profile.history_title_draft = None
                 elif pending_input.input_kind == "doctrine_name":
                     doctrine_input = await session.get(CharacterDoctrineInput, character.id)
                     if doctrine_input is not None:

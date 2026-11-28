@@ -331,6 +331,7 @@ class ContentModerationAdmin:
                 # An edited text was not what the report saw, so it stays.
                 if profile is not None and profile.history == report.snapshot:
                     profile.history = None
+                    profile.history_title = None
                     profile.revision += 1
                     profile.updated_at = now
                     removed = True

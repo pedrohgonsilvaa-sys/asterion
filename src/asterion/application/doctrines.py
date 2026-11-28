@@ -288,6 +288,7 @@ class DoctrineService:
                 )
                 if profile is not None:
                     profile.history_prompt_message_id = None
+                    profile.history_title_draft = None
                 lease.input_kind = "doctrine_name"
             elif lease is not None and lease.input_kind != "doctrine_name":
                 return False

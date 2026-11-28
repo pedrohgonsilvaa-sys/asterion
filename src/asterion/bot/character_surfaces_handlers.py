@@ -8,6 +8,9 @@ from aiogram.types import CallbackQuery, Message
 
 from asterion.application.character_surfaces import (
     MAX_HISTORY_CHARACTERS,
+    MAX_HISTORY_TITLE_CHARACTERS,
+    MIN_HISTORY_CHARACTERS,
+    MIN_HISTORY_TITLE_CHARACTERS,
     CharacterSurfacesService,
     HistoryInputResult,
 )
@@ -43,10 +46,28 @@ from asterion.bot.text_prompt import (
 HISTORY_PROMPT_KIND = "profile:history"
 HISTORY_ERRORS = {
     HistoryInputResult.TOO_LONG: (
-        f"⚠️ A História pode ter até {MAX_HISTORY_CHARACTERS} caracteres."
+        f"⚠️ A História pode ter de {MIN_HISTORY_CHARACTERS} a {MAX_HISTORY_CHARACTERS} "
+        "caracteres."
+    ),
+    HistoryInputResult.TOO_SHORT: (
+        f"⚠️ A História pode ter de {MIN_HISTORY_CHARACTERS} a {MAX_HISTORY_CHARACTERS} "
+        "caracteres."
     ),
     HistoryInputResult.FORBIDDEN: "⚠️ A História não pode ter links nem menções.",
     HistoryInputResult.EMPTY: "⚠️ A História está vazia.",
+}
+TITLE_ERRORS = {
+    **HISTORY_ERRORS,
+    HistoryInputResult.TOO_LONG: (
+        f"⚠️ O título pode ter de {MIN_HISTORY_TITLE_CHARACTERS} a "
+        f"{MAX_HISTORY_TITLE_CHARACTERS} caracteres."
+    ),
+    HistoryInputResult.TOO_SHORT: (
+        f"⚠️ O título pode ter de {MIN_HISTORY_TITLE_CHARACTERS} a "
+        f"{MAX_HISTORY_TITLE_CHARACTERS} caracteres."
+    ),
+    HistoryInputResult.FORBIDDEN: "⚠️ O título não pode ter links nem menções.",
+    HistoryInputResult.EMPTY: "⚠️ O título está vazio.",
 }
 
 
@@ -191,6 +212,7 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
             await present(query.message, render_history(current), images, edit=True)
             return
         await query.answer()
+        current = await service.profile(query.from_user.id) or current
         await present(query.message, render_history(current, writing=True), images, edit=True)
         PROMPTS.open(query.from_user.id, HISTORY_PROMPT_KIND, query.message)
 
@@ -198,11 +220,25 @@ def character_surfaces_router(service: CharacterSurfacesService, images: dict[st
     async def history_reply(message: Message, prompt: PendingPrompt) -> None:
         actor = message.from_user.id
         await consume_reply(message)
-        result = await service.save_history(actor, prompt.message_id, message.text or "")
-        notice = HISTORY_ERRORS.get(result)
+        current = await service.profile(actor)
+        if current is None:
+            PROMPTS.close(actor)
+            return
+        title_step = current.history_step == "title"
+        if title_step:
+            result = await service.save_history_title(actor, prompt.message_id, message.text or "")
+            notice = TITLE_ERRORS.get(result)
+        else:
+            result = await service.save_history(actor, prompt.message_id, message.text or "")
+            notice = HISTORY_ERRORS.get(result)
         view = await service.profile(actor)
         if view is None:
             PROMPTS.close(actor)
+            return
+        if result == HistoryInputResult.TITLE_SAVED:
+            # Título aceito: a mesma tela passa a pedir a História.
+            await show_on_prompt(message, prompt, render_history(view, writing=True), images)
+            PROMPTS.follow(actor, prompt)
             return
         if notice is not None:
             # Fica no estado de entrada, na mesma tela, com o aviso.

@@ -230,10 +230,24 @@ def test_history_screen_and_input_state():
     assert _labels(screen) == [["✍️ Escrever"], ["↩️ Retornar"]]
     assert screen.image_key == "character"
     writing = render_history(empty, writing=True)
-    assert writing.text.endswith("✍️ Envie a História do personagem.")
+    assert writing.text == (
+        "<b>✍️ Escrever História</b>\n\n<i>Dê um título para a história do seu personagem. "
+        "Ele ajudará a identificar e apresentar o relato.</i>\n\n"
+        "📝 Envie no chat o título desejado. Utilize de 5 a 16 caracteres."
+    )
     assert _labels(writing) == [["↩️ Retornar"]]
-    saved = render_history(ProfileView("Olev", 1, "sentinela", None, "Veio do <sul>.", 1))
-    assert "<blockquote>Veio do &lt;sul&gt;.</blockquote>" in saved.text
+    story_step = render_history(
+        ProfileView("Olev", 1, "sentinela", None, None, 0, history_step="story"), writing=True
+    )
+    assert story_step.text == (
+        "<b>✍️ Escrever História</b>\n\n<i>Conte quem seu personagem era, o que encontrou "
+        "pelo caminho e o que ainda busca em Asterion.</i>\n\n"
+        "📝 Envie no chat a história desejada. Utilize de 600 a 1.200 caracteres."
+    )
+    saved = render_history(
+        ProfileView("Olev", 1, "sentinela", None, "Veio do <sul>.", 1, history_title="Cinzas")
+    )
+    assert "<b>Cinzas</b>\n<blockquote>Veio do &lt;sul&gt;.</blockquote>" in saved.text
 
 
 # --- Feitos (Parte IV §6–§7) -------------------------------------------------------
@@ -631,11 +645,12 @@ async def test_history_prompt_replaces_a_pending_doctrine_name_prompt(database):
     assert await doctrines.begin_name_input(actor, "create", 700, view.configuration_version)
     # O pedido mais recente vence: a História não fica presa ao pedido de nome.
     assert await surfaces.begin_history_input(actor, 0, 701)
-    assert await surfaces.save_history(actor, 701, "Uma estrada.") == "saved"
+    assert await surfaces.save_history_title(actor, 701, "Estrada") == "title_saved"
+    assert await surfaces.save_history(actor, 701, "Uma estrada. " * 50) == "saved"
     assert await doctrines.begin_name_input(actor, "create", 702, view.configuration_version)
     mutation = await doctrines.save_name_reply(actor, 702, "Nova")
     assert mutation is not None and mutation.changed
-    assert (await surfaces.profile(actor)).history == "Uma estrada."
+    assert (await surfaces.profile(actor)).history == ("Uma estrada. " * 50).strip()
 
 
 @pytest.mark.asyncio

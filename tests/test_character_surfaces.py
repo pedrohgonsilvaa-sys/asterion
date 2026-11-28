@@ -137,27 +137,40 @@ async def test_profile_history_is_optional_persistent_escaped_and_prompt_version
     initial = await service.profile(actor)
     assert initial is not None and initial.history is None and initial.revision == 0
     assert await service.begin_history_input(actor, 0, 7001)
-    raw_history = '<script>alert("cinzas")</script>\nUma história & memória.'
+    raw_history = ('<script>alert("cinzas")</script>\nUma história & memória. ' * 15).strip()
+    # Sem título enviado antes, a História não é aceita.
+    assert await service.save_history(actor, 7001, raw_history) == HistoryInputResult.STALE
+    assert await service.save_history_title(actor, 7001, "abc") == HistoryInputResult.TOO_SHORT
+    assert (
+        await service.save_history_title(actor, 7001, "x" * 17) == HistoryInputResult.TOO_LONG
+    )
+    assert (
+        await service.save_history_title(actor, 7001, "Cinzas") == HistoryInputResult.TITLE_SAVED
+    )
+    assert await service.save_history(actor, 7001, "curta") == HistoryInputResult.TOO_SHORT
     assert await service.save_history(actor, 7001, raw_history) == HistoryInputResult.SAVED
 
     reopened = await CharacterSurfacesService(database[1], "ocaso").profile(actor)
     assert reopened is not None
     assert reopened.history == raw_history
     assert reopened.revision == 1
+    assert reopened.history_title == "Cinzas"
     assert await service.begin_history_input(actor, 1, 7002)
-    assert await service.save_history(actor, 7001, "resposta atrasada") == HistoryInputResult.STALE
+    late = await service.save_history(actor, 7001, "resposta atrasada " * 40)
+    assert late == HistoryInputResult.STALE
     assert await service.save_history(actor, 7002, "   \n\t ") == HistoryInputResult.EMPTY
     assert (
         await service.save_history(actor, 7002, "x" * (MAX_HISTORY_CHARACTERS + 1))
         == HistoryInputResult.TOO_LONG
     )
-    assert await service.save_history(actor, 7002, "A versão atual") == HistoryInputResult.SAVED
+    assert await service.save_history_title(actor, 7002, "Nova versão") == "title_saved"
+    assert await service.save_history(actor, 7002, "A versão atual " * 45) == "saved"
     await service.cancel_history_input(actor)
 
     async with database[1]() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         profile = await session.get(CharacterProfile, character.id)
-        assert profile.history == "A versão atual"
+        assert profile.history == ("A versão atual " * 45).strip()
         assert profile.history_prompt_message_id is None
         assert profile.revision == 2
 

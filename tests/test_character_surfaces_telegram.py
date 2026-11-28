@@ -217,25 +217,34 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
     assert not any(isinstance(call.args[1], SendMessage) for call in new_calls)
     screen = _last_screen(bot)
     assert isinstance(screen, EditMessageText)
-    assert "✍️ Envie a História do personagem." in screen.text
+    assert "📝 Envie no chat o título desejado." in screen.text
 
     update_id += 1
     await dispatcher.feed_raw_update(
-        bot, _message_update("x" * 601, actor=actor, update_id=update_id)
+        bot, _message_update("curto", actor=actor, update_id=update_id)
+    )
+    # Título aceito (5 a 16): a mesma tela passa a pedir a História.
+    screen = _last_screen(bot)
+    assert "📝 Envie no chat a história desejada." in screen.text
+
+    update_id += 1
+    await dispatcher.feed_raw_update(
+        bot, _message_update("x" * 1201, actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
-    assert "até 600 caracteres" in screen.text
-    assert "✍️ Envie a História do personagem." in screen.text
+    assert "de 600 a 1200 caracteres" in screen.text
+    assert "📝 Envie no chat a história desejada." in screen.text
 
+    story = "Uma história <cinzenta> & livre. " * 20
     update_id += 1
     await dispatcher.feed_raw_update(
-        bot,
-        _message_update("Uma história <cinzenta> & livre", actor=actor, update_id=update_id),
+        bot, _message_update(story, actor=actor, update_id=update_id)
     )
     screen = _last_screen(bot)
     assert isinstance(screen, EditMessageText)
-    assert "Uma história &lt;cinzenta&gt; &amp; livre" in screen.text
-    assert "✍️ Envie a História" not in screen.text
+    assert "<b>curto</b>" in screen.text
+    assert "Uma história &lt;cinzenta&gt; &amp; livre." in screen.text
+    assert "📝 Envie" not in screen.text
     # A resposta do jogador é apagada: nenhum prompt antigo fica no chat.
     assert any(
         type(call.args[1]).__name__ == "DeleteMessage"
@@ -246,7 +255,8 @@ async def test_character_knowledge_telegram_navigation_and_history_reply(databas
         from asterion.infrastructure.db.models import CharacterProfile
 
         profile = await session.get(CharacterProfile, character.id)
-        assert profile.history == "Uma história <cinzenta> & livre"
+        assert profile.history == story.strip()
+        assert profile.history_title == "curto"
 
     for call in bot.session.make_request.call_args_list:
         method = call.args[1]

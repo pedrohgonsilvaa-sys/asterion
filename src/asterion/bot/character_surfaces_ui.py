@@ -144,28 +144,47 @@ HISTORY_TEXT = (
     "Asterion."
 )
 HISTORY_WRITE = "✍️ Escrever"
-HISTORY_INPUT = "✍️ Envie a História do personagem."
+HISTORY_WRITE_TITLE = "✍️ Escrever História"
+HISTORY_TITLE_TEXT = (
+    "Dê um título para a história do seu personagem. Ele ajudará a identificar e apresentar "
+    "o relato."
+)
+HISTORY_TITLE_INPUT = "📝 Envie no chat o título desejado. Utilize de 5 a 16 caracteres."
+HISTORY_STORY_TEXT = (
+    "Conte quem seu personagem era, o que encontrou pelo caminho e o que ainda busca em "
+    "Asterion."
+)
+HISTORY_STORY_INPUT = "📝 Envie no chat a história desejada. Utilize de 600 a 1.200 caracteres."
 
 
 def render_history(
     view: ProfileView, *, writing: bool = False, notice: str | None = None
 ) -> Screen:
-    """História do personagem; ``writing`` é a mesma tela no estado de entrada de texto."""
+    """História do personagem; ``writing`` é o fluxo de escrita: primeiro o título, depois
+    a História, cada um em sua própria mensagem."""
     from html import escape
 
-    parts = [f"<b>{escape(HISTORY_TITLE)}</b>", f"<i>{escape(HISTORY_TEXT)}</i>"]
-    if view.history:
-        parts.append(f"<blockquote>{escape(view.history)}</blockquote>")
     if writing:
+        title_step = view.history_step == "title"
+        parts = [
+            f"<b>{escape(HISTORY_WRITE_TITLE)}</b>",
+            f"<i>{escape(HISTORY_TITLE_TEXT if title_step else HISTORY_STORY_TEXT)}</i>",
+        ]
         if notice:
             parts.append(escape(notice))
-        parts.append(escape(HISTORY_INPUT))
+        parts.append(escape(HISTORY_TITLE_INPUT if title_step else HISTORY_STORY_INPUT))
         rows = [[_button(CODEX_BACK, "character:profile")]]
-    else:
-        rows = [
-            [_button(HISTORY_WRITE, f"profile:edit:{_base36(view.revision)}")],
-            [_button(CODEX_BACK, "character:root")],
-        ]
+        return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
+    parts = [f"<b>{escape(HISTORY_TITLE)}</b>", f"<i>{escape(HISTORY_TEXT)}</i>"]
+    if view.history:
+        story = f"<blockquote>{escape(view.history)}</blockquote>"
+        if view.history_title:
+            story = f"<b>{escape(view.history_title)}</b>\n{story}"
+        parts.append(story)
+    rows = [
+        [_button(HISTORY_WRITE, f"profile:edit:{_base36(view.revision)}")],
+        [_button(CODEX_BACK, "character:root")],
+    ]
     return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
 
 
