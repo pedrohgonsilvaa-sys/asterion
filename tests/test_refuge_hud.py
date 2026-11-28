@@ -12,7 +12,7 @@ from asterion.application.chronicle import ChronicleService
 from asterion.application.engagement import DailyGiftService
 from asterion.application.road import REFUGE
 from asterion.application.world import WorldView
-from asterion.bot.asset_catalog import build_asset_images, location_key
+from asterion.bot.asset_catalog import build_asset_images
 from asterion.bot.media import assets_root, resolve_asset_file
 from asterion.bot.refuge_hud import RefugeHud, RefugeHudLoader
 from asterion.bot.world_ui import render_refuge_dashboard, roman
@@ -181,22 +181,22 @@ def test_daily_gift_button_only_when_available_and_alone_on_first_row():
 
 
 def test_refuge_image_key_exists_in_real_catalog():
-    key = location_key(REFUGE)
+    key = "region.tdo"
     assert _screen().image_key == key
     if not (assets_root() / "maps" / "terras do ocaso").is_dir():
         pytest.skip("assets/ not present")
     images = build_asset_images((), assets_root())
     assert key in images
-    assert resolve_asset_file(images[key], assets_root()).name.startswith("refugio.v")
+    assert resolve_asset_file(images[key], assets_root()).name.startswith("terras_do_ocaso.v")
 
 
 def test_refuge_image_key_resolves_from_synthetic_assets(tmp_path):
     for n in (1, 2):
-        path = tmp_path / f"maps/terras do ocaso/refugio.v0{n}.jpg"
+        path = tmp_path / f"maps/terras do ocaso/terras_do_ocaso.v0{n}.jpg"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"x")
     images = build_asset_images((), tmp_path)
-    assert images[_screen().image_key] == "file:maps/terras do ocaso/refugio.v*.jpg"
+    assert images[_screen().image_key] == "file:maps/terras do ocaso/terras_do_ocaso.v*.jpg"
 
 
 def test_brazier_screen_is_preserved():

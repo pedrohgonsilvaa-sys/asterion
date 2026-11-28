@@ -195,6 +195,8 @@ CLASS_EMOJI = {
 }
 REFUGE_TITLE = "🌘 Terras do Ocaso"
 REFUGE_IMAGE_KEY = location_key(REFUGE_LABEL)
+# Menu principal "Terras do Ocaso": imagem da região, não a do Refúgio.
+TDO_REGION_IMAGE_KEY = "region.tdo"
 DAILY_GIFT_BUTTON = "✨ Resgatar Dádiva Diária"
 DESBRAVAR_ENTRY = "tdo:explore"
 # Menu Principal (decisão do autor 2026-11-26 §3): Dádiva Diária em largura total, depois
@@ -402,7 +404,7 @@ def render_refuge_dashboard(
     hud = hud or RefugeHud()
     return Screen(
         refuge_hud_text(view, hud),
-        REFUGE_IMAGE_KEY,
+        TDO_REGION_IMAGE_KEY,
         refuge_menu_keyboard(
             gift_available=hud.gift_available,
             flagelo_awake=hud.flagelo is not None and hud.flagelo.flagelo_awake,
