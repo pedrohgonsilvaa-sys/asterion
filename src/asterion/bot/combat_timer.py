@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import logging
 import math
 from collections.abc import Awaitable, Callable
@@ -36,6 +37,12 @@ TIMEOUT_ACTION = "timeout"
 # A tick never outlives a turn that nobody resolves (e.g. the service vanished).
 MAX_TICKS = 600
 _SETTLE = 0.05
+# Returned by ``CombatTicker.write`` when the render was not sent (identical to the
+# last one, or superseded by a newer read of the combat).
+SKIPPED = object()
+# Monotonic tickets: a render takes its ticket *before* reading the combat, so a
+# higher ticket always means a read that happened later.
+_tickets = itertools.count()
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,12 +61,79 @@ def _seconds(combat: Combat | None) -> float | None:
     return turn_seconds_left(combat)
 
 
+def fingerprint(screen: Screen) -> str:
+    """Everything the message would show; an identical fingerprint needs no edit."""
+    keyboard = screen.keyboard.model_dump_json(exclude_none=True) if screen.keyboard else ""
+    return f"{screen.parse_mode}\x1f{screen.text}\x1f{keyboard}"
+
+
 class CombatTicker:
-    """One countdown task per combat message; a new watch replaces the old one."""
+    """One countdown task per combat message; a new watch replaces the old one.
+
+    Every write to a live combat message (the countdown *and* the action handlers'
+    re-renders) goes through ``write``: one at a time per message, never twice the
+    same content, and never an older read after a newer one.
+    """
 
     def __init__(self, *, sleep: Callable[[float], Awaitable[object]] = asyncio.sleep):
         self._tasks: dict[tuple[int, int], asyncio.Task] = {}
         self._sleep = sleep
+        self._locks: dict[tuple[int, int], asyncio.Lock] = {}
+        self._ticket: dict[tuple[int, int], int] = {}
+        self._written: dict[tuple[int, int], str] = {}
+
+    def begin(self) -> int:
+        return next(_tickets)
+
+    def tracks(self, chat_id: int, message_id: int) -> bool:
+        key = (chat_id, message_id)
+        return key in self._tasks or key in self._written
+
+    def seed(self, chat_id: int, message_id: int, screen: Screen) -> None:
+        """Remember what a freshly sent message shows, so the countdown does not repeat it."""
+        self._written[(chat_id, message_id)] = fingerprint(screen)
+
+    def release(self, chat_id: int, message_id: int) -> None:
+        """Forget a message once it leaves the live countdown (its state is no longer needed)."""
+        key = (chat_id, message_id)
+        self._ticket.pop(key, None)
+        self._written.pop(key, None)
+        lock = self._locks.get(key)
+        if lock is None or not lock.locked():
+            self._locks.pop(key, None)
+
+    async def write(
+        self,
+        chat_id: int,
+        message_id: int,
+        ticket: int,
+        screen: Screen,
+        edit: Callable[[], Awaitable[object]],
+        *,
+        force: bool = False,
+    ):
+        """Run ``edit`` for ``screen`` unless it is stale (or, without ``force``, redundant).
+
+        Writes to one message are serialized by its lock. A write is skipped when a
+        render with a later ticket already reached the message (its read is newer) or,
+        unless ``force``, when the message already shows exactly this content. Action
+        and callback renders use ``force``: a stale tap still redraws the current HUD.
+        The countdown never forces, so its restart does not repeat the action's render.
+        """
+        key = (chat_id, message_id)
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            current = fingerprint(screen)
+            if ticket < self._ticket.get(key, -1):
+                return SKIPPED
+            if not force and self._written.get(key) == current:
+                self._ticket[key] = ticket
+                return SKIPPED
+            result = await edit()
+            if result is not None:
+                self._ticket[key] = ticket
+                self._written[key] = current
+            return result
 
     def stop(self, chat_id: int, message_id: int) -> None:
         task = self._tasks.pop((chat_id, message_id), None)
@@ -88,18 +162,22 @@ class CombatTicker:
         return task
 
     async def _run(self, bot, chat_id, message_id, refresh, expire) -> None:
-        shown: str | None = None
         caption = True
         for _ in range(MAX_TICKS):
+            ticket = self.begin()
             tick = await refresh()
             if tick is None:
                 return
             left = _seconds(tick.combat)
-            if tick.screen.text != shown:
-                caption = await self._edit(bot, chat_id, message_id, tick.screen, caption)
-                if caption is None:
-                    return
-                shown = tick.screen.text
+
+            async def edit(screen=tick.screen, mode=caption):
+                return await self._edit(bot, chat_id, message_id, screen, mode)
+
+            result = await self.write(chat_id, message_id, ticket, tick.screen, edit)
+            if result is None:
+                return
+            if result is not SKIPPED:
+                caption = result
             if left is None:
                 # Combat over or no timed turn open: nothing left to count.
                 return
@@ -177,6 +255,7 @@ def on_present(message: Message | None, message_id: int | None, screen: Screen) 
         return
     if not screen.timer:
         ticker.stop(chat.id, message_id)
+        ticker.release(chat.id, message_id)
         return
     context, _, activity_hex = screen.timer.partition(":")
     factory = _FACTORIES.get(context)
@@ -211,9 +290,11 @@ def watch_combat_message(
 
 
 __all__ = [
+    "SKIPPED",
     "TIMEOUT_ACTION",
     "CombatTicker",
     "Tick",
+    "fingerprint",
     "on_present",
     "register",
     "ticker",

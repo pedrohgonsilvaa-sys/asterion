@@ -216,11 +216,13 @@ async def _screen_media(screen: Screen, images: dict[str, str], chat: Chat):
     cache_key: str | None = None
     path = None
     if image and image.startswith("file:"):
+        # A live combat keeps one picture for the whole activity: without a seed every
+        # re-render drew a new random variant and swapped the photo on each action.
+        activity = screen.timer.partition(":")[2] if screen.timer else ""
+        seed = screen.media_seed or (f"activity:{activity}" if activity else None)
         path = resolve_asset_file(
             image,
-            selection_key=(
-                f"{screen.media_seed}:{screen.image_key}" if screen.media_seed else None
-            ),
+            selection_key=f"{seed}:{screen.image_key}" if seed else None,
         )
         cache_key = str(path) if path else None
         media = _PHOTO_FILE_IDS.get(cache_key) if cache_key else None
@@ -242,9 +244,29 @@ async def present(
 
     A timed combat screen also (re)starts its live turn countdown on that message.
     """
-    message_id = await _present(message, screen, images, edit=edit)
-    from asterion.bot.combat_timer import on_present
+    from asterion.bot.combat_timer import SKIPPED, on_present, ticker
 
+    chat = getattr(message, "chat", None)
+    current_id = getattr(message, "message_id", None)
+    if edit and chat is not None and current_id is not None and (
+        screen.timer or ticker.tracks(chat.id, current_id)
+    ):
+        # Live combat message: this edit and the countdown share one ordered writer,
+        # so a stale countdown read can never overwrite the action's newer render.
+        message_id = await ticker.write(
+            chat.id,
+            current_id,
+            ticker.begin(),
+            screen,
+            lambda: _present(message, screen, images, edit=edit),
+            force=True,
+        )
+        if message_id is SKIPPED:
+            message_id = current_id
+    else:
+        message_id = await _present(message, screen, images, edit=edit)
+        if screen.timer and chat is not None and message_id is not None:
+            ticker.seed(chat.id, message_id, screen)
     on_present(message, message_id, screen)
     return message_id
 
