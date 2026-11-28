@@ -8,7 +8,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.inventory import InventoryEntry, InventoryView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.item_lines import list_item
-from asterion.bot.ui_format import CHARACTER_SKIN, keycap, numeric_rows, page_nav
+from asterion.bot.ui_format import (
+    CHARACTER_SKIN,
+    compact_numeric_rows,
+    keycap,
+    numeric_rows,
+    page_nav,
+)
 from asterion.domain.consumables import grade_label
 
 # UI aprovada: até 6 itens por página, cada um com seu botão numérico.
@@ -206,6 +212,9 @@ FILTER_LABELS = {
     "materials": "Materiais",
     "runes": "Runas",
 }
+# Callback sem efeito: o Telegram não desabilita botões inline, então o botão do filtro
+# já selecionado apenas confirma o toque.
+INACTIVE_FILTER_CALLBACK = "inventory:noop"
 FILTER_BUTTONS = (
     (("📋 Todos", "inventory:category:all"),),
     (
@@ -350,11 +359,22 @@ def _render_listing(view: InventoryView, page: int) -> Screen:
             *page_line(page, pages),
         )
     )
-    rows = numeric_rows(numbered_buttons([select_callback(entry) for entry in entries]))
-    rows.extend(
-        [InlineKeyboardButton(text=text, callback_data=data) for text, data in row]
-        for row in FILTER_BUTTONS
-    )
+    rows = compact_numeric_rows(numbered_buttons([select_callback(entry) for entry in entries]))
+    for row in FILTER_BUTTONS:
+        # Com o filtro Todos já selecionado o botão continua visível, mas inerte.
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=(
+                        INACTIVE_FILTER_CALLBACK
+                        if data == "inventory:category:all" and category == "all"
+                        else data
+                    ),
+                )
+                for text, data in row
+            ]
+        )
     rows.append(page_nav(page, pages, lambda target: f"inventory:category:{category}:{target}"))
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="character:root")])
     return Screen(

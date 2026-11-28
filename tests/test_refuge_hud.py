@@ -138,7 +138,7 @@ def test_flagelo_block_has_bold_name_then_bar_and_percent():
     status = RegionStatus(RegionBar("tdo", "🌑", "Ocaso", 21, 500, 4, False), False)
     text = _screen(RefugeHud(flagelo=status)).text
     assert text.split("\n\n")[-1] == (
-        "🔥 <b>Despertar de Varkhenn</b>\n🟥" + "⬜" * 9 + " <code>4%</code>"
+        "🔥 <b>Despertar de Varkhenn</b> · <code>4%</code>\n🟥" + "⬜" * 9
     )
 
 

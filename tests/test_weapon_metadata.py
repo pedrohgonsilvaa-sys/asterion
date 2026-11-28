@@ -495,8 +495,8 @@ def test_weapon_incompatible_art_detail_keeps_compatibility_as_a_mechanical_rule
         for row in detail.keyboard.inline_keyboard
         for button in row
     ]
-    assert "1️⃣ Equipar Arte [Slot 1]" in buttons
-    assert "❌ Desequipar" in buttons
+    assert "❌ Desequipar Arte #1" in buttons
+    assert "2️⃣ Equipar Arte #2" in buttons
 
     unconfigured = render_art_detail(replace(view, slots=()), art_id)
     unconfigured_buttons = [
@@ -504,7 +504,7 @@ def test_weapon_incompatible_art_detail_keeps_compatibility_as_a_mechanical_rule
         for row in unconfigured.keyboard.inline_keyboard
         for button in row
     ]
-    assert "❌ Desequipar" not in unconfigured_buttons
+    assert not any(text.startswith("❌ Desequipar") for text in unconfigured_buttons)
 
 
 def test_errante_corte_duplo_detail_shows_two_hits_and_explicit_weapon_requirement():

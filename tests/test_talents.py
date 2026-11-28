@@ -313,7 +313,8 @@ def test_talent_and_art_screens_render_every_class_catalog_without_future_execut
             for button in row
         )
         art_detail = render_art_detail(art_view, art_ids[0])
-        assert "Arte Ativa" in art_detail.text
+        assert "Arte Ativa" not in art_detail.text
+        assert "📑 <b>Status</b>" in art_detail.text
         if character_class == "vigia":
             assert "Dano · 40% ATQ" in plain(render_art_detail(art_view, art_ids[2]).text)
             assert "Atinge · 3 vezes" in plain(render_art_detail(art_view, art_ids[2]).text)
@@ -350,7 +351,7 @@ def test_devastador_ariete_is_visible_with_explicit_melee_requirement():
     # Parte I §8: sem campo separado de Requisito de Arma; a compatibilidade continua
     # como regra mecânica, verificada ao equipar.
     assert "Arma corpo a corpo compatível" not in detail.text
-    slots = ["1️⃣ Equipar Arte [Slot 1]", "2️⃣ Equipar Arte [Slot 2]", "3️⃣ Equipar Arte [Slot 3]"]
+    slots = ["1️⃣ Equipar Arte #1", "2️⃣ Equipar Arte #2", "3️⃣ Equipar Arte #3"]
     labels = [button.text for row in detail.keyboard.inline_keyboard for button in row]
     assert labels == [*slots, "↩️ Retornar"]
 

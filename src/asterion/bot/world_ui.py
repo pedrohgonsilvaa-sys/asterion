@@ -298,11 +298,14 @@ def flagelo_heading(region_id: str) -> str:
     return f"{emoji} <b>Despertar de {escape(flagelo.short_name)}</b>"
 
 
-def _flagelo_emoji(hud) -> str:
+def _flagelo_label(hud) -> str:
+    """Botão do Flagelo: emoji + nome completo, ex.: ``🔥 Varkhenn, o Flagelo das Cinzas``."""
     from asterion.domain.flagelos import REGIONS_BY_ID
 
     region = REGIONS_BY_ID.get(hud.flagelo.bar.region_id) if hud.flagelo else None
-    return FLAGELO_EMOJI.get(region.flagelo.flagelo_id, "🔥") if region else "🔥"
+    if region is None:
+        return "🔥 Despertar"
+    return f"{FLAGELO_EMOJI.get(region.flagelo.flagelo_id, '🔥')} {region.flagelo.name}"
 
 
 def awakening_bar(points: int, threshold: int) -> str:
@@ -348,9 +351,8 @@ def refuge_hud_text(view: WorldView, hud: RefugeHud | None = None) -> str:
         # a barra começa vermelha e fica toda roxa em 100%.
         flagelo_bar = hud.flagelo.bar
         parts.append(
-            f"{flagelo_heading(flagelo_bar.region_id)}\n"
-            f"{awakening_bar(flagelo_bar.points, flagelo_bar.threshold)} "
-            f"{mono(f'{flagelo_bar.percent}%')}"
+            f"{flagelo_heading(flagelo_bar.region_id)} · {mono(f'{flagelo_bar.percent}%')}\n"
+            f"{awakening_bar(flagelo_bar.points, flagelo_bar.threshold)}"
         )
     return "\n\n".join(parts)
 
@@ -359,7 +361,7 @@ FLAGELO_BUTTON = ("🔥 Despertar", "flg:hub")
 
 
 def refuge_menu_keyboard(
-    *, gift_available: bool, flagelo_awake: bool = False, flagelo_emoji: str = "🔥"
+    *, gift_available: bool, flagelo_awake: bool = False, flagelo_label: str = "🔥 Despertar"
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if gift_available:
@@ -368,9 +370,7 @@ def refuge_menu_keyboard(
         # Leva ao hub do evento (barras, status e acesso ao combate), sem navegação paralela.
         rows.append(
             [
-                InlineKeyboardButton(
-                    text=f"{flagelo_emoji} Despertar", callback_data=FLAGELO_BUTTON[1]
-                )
+                InlineKeyboardButton(text=flagelo_label, callback_data=FLAGELO_BUTTON[1])
             ]
         )
     rows.extend(
@@ -406,7 +406,7 @@ def render_refuge_dashboard(
         refuge_menu_keyboard(
             gift_available=hud.gift_available,
             flagelo_awake=hud.flagelo is not None and hud.flagelo.flagelo_awake,
-            flagelo_emoji=_flagelo_emoji(hud),
+            flagelo_label=_flagelo_label(hud),
         ),
         "HTML",
     )

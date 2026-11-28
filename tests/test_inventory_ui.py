@@ -339,9 +339,9 @@ def _materials(count):
         (1, [["1️⃣"]]),
         (2, [["1️⃣", "2️⃣"]]),
         (3, [["1️⃣", "2️⃣", "3️⃣"]]),
-        (4, [["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"]]),
-        (5, [["1️⃣", "2️⃣", "3️⃣"], ["4️⃣", "5️⃣"]]),
-        (6, [["1️⃣", "2️⃣", "3️⃣"], ["4️⃣", "5️⃣", "6️⃣"]]),
+        (4, [["1️⃣", "2️⃣", "3️⃣", "4️⃣"]]),
+        (5, [["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]]),
+        (6, [["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]]),
     ],
 )
 def test_inventory_numeric_rows_follow_the_approved_distribution(count, expected):
@@ -384,8 +384,10 @@ def test_inventory_opens_on_the_listing_with_filters_and_approved_layout():
         ["↩️ Retornar"],
     ]
     callbacks = _callbacks(screen)
+    # Filtro Todos já selecionado: botão visível, porém inerte.
+    assert "inventory:noop" in callbacks
+    assert "inventory:category:all" not in callbacks
     for expected in (
-        "inventory:category:all",
         "inventory:category:equipment",
         "inventory:category:consumables",
         "inventory:category:materials",

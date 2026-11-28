@@ -207,6 +207,18 @@ def numeric_row_sizes(count: int) -> list[int]:
     return [base + 1 if index < extra else base for index in range(rows)]
 
 
+# Telegram aceita até 8 botões por fila; com keycaps (1️⃣…) cabem todos na mesma linha.
+COMPACT_NUMERIC_PER_ROW = 8
+
+
+def compact_numeric_rows(
+    buttons: list[InlineKeyboardButton],
+) -> list[list[InlineKeyboardButton]]:
+    """Botões só numéricos na menor quantidade de filas: até 8 por fila (UI 2026-11-28)."""
+    size = COMPACT_NUMERIC_PER_ROW
+    return [buttons[start : start + size] for start in range(0, len(buttons), size)]
+
+
 def numeric_rows(buttons: list[InlineKeyboardButton]) -> list[list[InlineKeyboardButton]]:
     """Distribui os botões numéricos nas filas de ``numeric_row_sizes``."""
     rows, start = [], 0

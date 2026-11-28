@@ -374,18 +374,16 @@ def test_arts_page_one_lists_all_class_arts_with_lock_state():
     assert screen.text == (
         _ARTS_HEADER
         + "📄 <b>Página</b> · <code>1/3</code>\n\n"
-        + _EMPTY_SLOTS
         + "🛡️ <b>Artes da Classe</b> · <code>Sentinela</code>\n\n"
         "#1 ⚔️ <b>Golpe de Guarda</b> · <code>Nv. 1</code>\n"
         "#2 🔒 <b>Quebra-Postura</b> · <code>Nv. 4</code>\n"
         "#3 🔒 <b>Muralha Breve</b> · <code>Nv. 7</code>\n"
         "#4 🔒 <b>Impacto Resoluto</b> · <code>Nv. 9</code>\n"
         "#5 🔒 <b>Firmeza</b> · <code>Nv. 18</code>\n"
-        "#6 🔒 <b>Golpe de Rechaço</b> · <code>Nv. 34</code>"
+        "#6 🔒 <b>Golpe de Rechaço</b> · <code>Nv. 34</code>\n\n" + _EMPTY_SLOTS.rstrip("\n")
     )
     assert _labels(screen) == [
-        ["1️⃣", "2️⃣", "3️⃣"],
-        ["4️⃣", "5️⃣", "6️⃣"],
+        ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"],
         ["▶️ Próxima"],
         ["↩️ Retornar"],
     ]
@@ -397,15 +395,14 @@ def test_arts_pages_two_and_three_list_each_path():
     assert second.text == (
         _ARTS_HEADER
         + "📄 <b>Página</b> · <code>2/3</code>\n\n"
-        + _EMPTY_SLOTS
         + "🏰 <b>Artes do Caminho</b> · <code>Bastião</code>\n\n"
         "#1 🔒 <b>Escudo de Cinzas</b> · <code>Nv. 12</code>\n"
         "#2 🔒 <b>Interpor</b> · <code>Nv. 22</code>\n"
         "#3 🔒 <b>Contra-Golpe</b> · <code>Nv. 38</code>\n"
-        "#4 🔒 <b>Última Muralha</b> · <code>Nv. 52</code>"
+        "#4 🔒 <b>Última Muralha</b> · <code>Nv. 52</code>\n\n" + _EMPTY_SLOTS.rstrip("\n")
     )
     assert _labels(second) == [
-        ["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"], ["◀️ Anterior", "▶️ Próxima"], ["↩️ Retornar"],
+        ["1️⃣", "2️⃣", "3️⃣", "4️⃣"], ["◀️ Anterior", "▶️ Próxima"], ["↩️ Retornar"],
     ]
     third = render_art_root(_arts_view(), 2)
     assert "📄 <b>Página</b> · <code>3/3</code>" in third.text
@@ -416,7 +413,7 @@ def test_arts_pages_two_and_three_list_each_path():
         "#3 🔒 <b>Abalo</b> · <code>Nv. 38</code>\n"
         "#4 🔒 <b>Ruptor</b> · <code>Nv. 52</code>"
     ) in third.text
-    assert _labels(third) == [["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"], ["◀️ Anterior"], ["↩️ Retornar"]]
+    assert _labels(third) == [["1️⃣", "2️⃣", "3️⃣", "4️⃣"], ["◀️ Anterior"], ["↩️ Retornar"]]
 
 
 def test_arts_equipped_state_fills_slot_and_marks_the_list():
@@ -424,7 +421,7 @@ def test_arts_equipped_state_fills_slot_and_marks_the_list():
     screen = render_art_root(_arts_view(slots=(ActiveArtSlotSnapshot(2, golpe),)))
     assert (
         "📜 <b>Artes Equipadas</b>\n\n<code>⛔️ Vazio</code>\n"
-        "<code>⚔️ Golpe de Guarda</code>\n<code>⛔️ Vazio</code>"
+        "⚔️ <b>Golpe de Guarda</b>\n<code>⛔️ Vazio</code>"
     ) in screen.text
     assert "#1 ✅ <b>Golpe de Guarda</b> · <code>Nv. 1</code>" in screen.text
 
@@ -455,13 +452,13 @@ def test_art_detail_chooses_the_slot_directly():
         "para atingir o inimigo em um movimento direto.</i>\n\n"
         "⚔️ <b>Dano</b> · <code>110% ATQ</code>\n🎯 <b>Alvo</b> · <code>1 Inimigo</code>\n"
         "⏳ <b>Recarga</b> · <code>2 Rodadas</code>\n\n"
-        "🔓 <b>Desbloqueio</b> · <code>Nv. 1</code>\n"
-        "🛡️ <b>Arte Ativa</b> · <code>Sentinela</code>"
+        "📑 <b>Status</b> · <code>Desbloqueada</code>\n"
+        "🔓 <b>Desbloqueio</b> · <code>Nv. 1</code>"
     )
     assert _labels(screen) == [
-        ["1️⃣ Equipar Arte [Slot 1]"],
-        ["2️⃣ Equipar Arte [Slot 2]"],
-        ["3️⃣ Equipar Arte [Slot 3]"],
+        ["1️⃣ Equipar Arte #1"],
+        ["2️⃣ Equipar Arte #2"],
+        ["3️⃣ Equipar Arte #3"],
         ["↩️ Retornar"],
     ]
 
@@ -492,7 +489,7 @@ async def test_equipping_an_art_returns_to_arts_and_incompatible_weapon_alerts()
         if isinstance(call.args[1], EditMessageText)
     )
     assert "<b>🧿 Artes</b>" in screen.text
-    assert "<code>⛔️ Vazio</code>\n<code>⚔️ Disparo Preciso</code>" in screen.text
+    assert "<code>⛔️ Vazio</code>\n⚔️ <b>Disparo Preciso</b>" in screen.text
 
     incompatible = _arts_view(
         character_class="vigia",

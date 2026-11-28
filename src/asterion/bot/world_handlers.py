@@ -1703,6 +1703,11 @@ def world_router(
         if view is not None:
             await present(query.message, render_inventory(view), images, edit=True)
 
+    @router.callback_query(F.data == "inventory:noop")
+    async def inventory_filter_selected(query: CallbackQuery):
+        """Filtro já selecionado: botão visível, sem ação nem mudança de estado."""
+        await query.answer()
+
     @router.callback_query(F.data.startswith("inventory:category:"))
     async def inventory_category(query: CallbackQuery):
         warehouse_from_refuge.discard(query.from_user.id)

@@ -9,7 +9,7 @@ from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
-from asterion.bot.ui_format import keycap, numeric_rows, page_nav
+from asterion.bot.ui_format import KEYCAPS, compact_numeric_rows, page_nav
 from asterion.bot.world_ui import CLASS_EMOJI
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
@@ -520,6 +520,11 @@ ART_DESCRIPTIONS = {
         "O golpe usa o peso da lâmina e a firmeza da guarda para atingir o inimigo em um "
         "movimento direto."
     ),
+    "errante.corte_veloz": (
+        "O Errante avança em um movimento curto e preciso, conduzindo a lâmina em um corte "
+        "rápido e direto. O golpe aproveita a abertura do inimigo e concentra toda a força "
+        "do movimento em um único ataque."
+    ),
 }
 ART_CATEGORY_EMOJI = {
     "Ataque": "⚔️",
@@ -528,7 +533,6 @@ ART_CATEGORY_EMOJI = {
     "Preparação": "🛡️",
     "Manifestação": "🔮",
 }
-_KEYCAPS = ("1️⃣", "2️⃣", "3️⃣")
 # Regras de Presságio das Artes do Oráculo, mostradas junto da mecânica da Arte.
 ART_OMEN_LINES = {
     ORACULO_ART_IDS["augurio_favoravel"]: (
@@ -606,10 +610,11 @@ def render_art_root(view: ActiveArtCharacterView, page: int = 0) -> Screen:
     for slot in (1, 2, 3):
         art_id = next((entry.art_id for entry in view.slots if entry.slot == slot), None)
         if art_id in actions:
-            label = f"{_art_emoji(actions[art_id])} {actions[art_id].name}"
+            equipped_lines.append(
+                f"{_art_emoji(actions[art_id])} <b>{escape(actions[art_id].name)}</b>"
+            )
         else:
-            label = "⛔️ Vazio"
-        equipped_lines.append(f"<code>{escape(label)}</code>")
+            equipped_lines.append("<code>⛔️ Vazio</code>")
     pages = art_pages(view.character_class)
     page = min(max(page, 0), len(pages) - 1)
     title, path_id, arts = pages[page]
@@ -635,18 +640,18 @@ def render_art_root(view: ActiveArtCharacterView, page: int = 0) -> Screen:
             f"<code>Nv. {definition.min_level}</code>"
         )
         buttons.append(
-            _button(keycap(position), f"art:d:{_base36(_art_index(view, art_id))}:{version}")
+            _button(KEYCAPS[position - 1], f"art:d:{_base36(_art_index(view, art_id))}:{version}")
         )
-    rows = numeric_rows(buttons)
+    rows = compact_numeric_rows(buttons)
     rows.append(page_nav(page, len(pages), lambda target: f"art:p:{target}"))
     rows.append([_button("↩️ Retornar", "character:root")])
     parts = [
         f"<b>{escape(ARTS_TITLE)}</b>",
         f"<i>{escape(ARTS_TEXT)}</i>",
         f"📄 <b>Página</b> · <code>{page + 1}/{len(pages)}</code>",
-        "📜 <b>Artes Equipadas</b>\n\n" + "\n".join(equipped_lines),
         f"{emoji} <b>{escape(title)}</b> · <code>{escape(owner)}</code>\n\n"
         + "\n".join(art_lines),
+        "📜 <b>Artes Equipadas</b>\n\n" + "\n".join(equipped_lines),
     ]
     return Screen(
         "\n\n".join(parts), "character", _keyboard([row for row in rows if row]), parse_mode="HTML"
@@ -670,34 +675,28 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
     parts.append("\n".join(_field_html(line) for line in _art_mechanics_lines(action)))
     if omen := ART_OMEN_LINES.get(art_id):
         parts.append("\n".join(escape(line) for line in omen))
-    origin = _class_label(view.character_class) + (
-        f" · {PATH_DEFINITIONS[definition.path_id].name}"
-        if definition is not None and definition.path_id in PATH_DEFINITIONS
-        else ""
-    )
-    about = []
+    unlocked = art_id in view.available_art_ids
+    about = [_field_html(f"📑 Status · {'Desbloqueada' if unlocked else 'Bloqueada'}")]
     if definition is not None:
         about.append(_field_html(f"🔓 Desbloqueio · Nv. {definition.min_level}"))
-    about.append(_field_html(f"🛡️ Arte Ativa · {origin}"))
     parts.append("\n".join(about))
     # Arte bloqueada abre só a leitura do detalhe (decisão do autor 2026-11-28).
-    rows = (
-        [
-            [
-                _button(
-                    f"{_KEYCAPS[slot - 1]} Equipar Arte [Slot {slot}]",
-                    f"art:s:{_base36(art_index)}:{slot}:{version}",
+    rows = []
+    if unlocked:
+        for slot in (1, 2, 3):
+            if slot == equipped_slot:
+                rows.append(
+                    [_button(f"❌ Desequipar Arte #{slot}", f"art:u:{_base36(slot)}:{version}")]
                 )
-            ]
-            for slot in (1, 2, 3)
-        ]
-        if art_id in view.available_art_ids
-        else []
-    )
-    if equipped_slot is not None:
-        rows.append(
-            [_button("❌ Desequipar", f"art:u:{_base36(equipped_slot)}:{version}")]
-        )
+            else:
+                rows.append(
+                    [
+                        _button(
+                            f"{KEYCAPS[slot - 1]} Equipar Arte #{slot}",
+                            f"art:s:{_base36(art_index)}:{slot}:{version}",
+                        )
+                    ]
+                )
     page = art_page_of(view.character_class, art_id)
     rows.append([_button("↩️ Retornar", f"art:p:{page}" if page else "art:r")])
     return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
