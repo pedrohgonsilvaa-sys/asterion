@@ -324,7 +324,7 @@ def test_material_detail_shows_grade_quantity_type_and_bind():
         "🧱 <b>Tipo</b> · <code>Material</code>\n"
         "🔗 <b>Vínculo</b> · <code>Vinculado</code>"
     )
-    assert _labels(screen) == [["📦 Guardar"], ["↩️ Retornar"]]
+    assert _labels(screen) == [["📦 Guardar"], ["🗑️ Descartar"], ["↩️ Retornar"]]
     assert screen.keyboard.inline_keyboard[0][0].callback_data == (
         "warehouse:deposit:material:0f0f0f0f000000000000000000000001"
     )
