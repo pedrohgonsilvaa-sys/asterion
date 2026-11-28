@@ -27,13 +27,15 @@ def test_protection_detail_matches_player_facing_source_without_floor():
             entries=(consumable_inventory_entry(item_id, 4),),
         )
     )
-    assert "🧪 Preparado de Proteção Enredada · Grau II" in screen.text
-    assert "Consumível · Proteção" in screen.text
-    assert "🎒 Quantidade · 4" in screen.text
-    assert "🔰 Barreira · 12% do HP Máximo" in screen.text
-    assert "⏳ Duração · 2T" in screen.text
-    assert "🎯 Alvo · Próprio" in screen.text
-    assert "⚔️ Uso · Somente em Combate PvE" in screen.text
+    assert "🧪 <b>Preparado de Proteção Enredada</b>" in screen.text
+    assert "✨ <b>Grau</b> · <code>II</code>" in screen.text
+    assert "<i>" in screen.text
+    assert "🧪 <b>Tipo</b> · <code>Consumível · Proteção</code>" in screen.text
+    assert "📦 <b>Quantidade</b> · <code>4</code>" in screen.text
+    assert "🔰 <b>Barreira</b> · <code>12% do HP Máximo</code>" in screen.text
+    assert "⏳ <b>Duração</b> · <code>2T</code>" in screen.text
+    assert "🎯 <b>Alvo</b> · <code>Próprio</code>" in screen.text
+    assert "⚔️ <b>Uso</b> · <code>Somente em Combate PvE</code>" in screen.text
     assert "floor(" not in screen.text
     assert "Usar" not in [button.text for row in screen.keyboard.inline_keyboard for button in row]
     assert _callbacks(screen) == ["inventory:category:consumables"]
@@ -60,9 +62,10 @@ def test_all_seven_families_resolve_names_grades_and_context_in_details():
                 entries=(consumable_inventory_entry(item_id, 2),),
             )
         )
-        assert f"🧪 {item.name} · Grau {grade_label(item.grade)}" in screen.text
-        assert expected_family_lines[item.family.value] in screen.text
-        assert "🎒 Quantidade · 2" in screen.text
+        assert f"🧪 <b>{item.name}</b>" in screen.text
+        assert f"✨ <b>Grau</b> · <code>{grade_label(item.grade)}</code>" in screen.text
+        assert f"<code>{expected_family_lines[item.family.value]}</code>" in screen.text
+        assert "📦 <b>Quantidade</b> · <code>2</code>" in screen.text
         assert "consumable." not in screen.text
         assert not any(
             button.text == "Usar"
@@ -84,13 +87,13 @@ def test_vigor_detail_only_exposes_use_when_backend_marks_it_available():
             vigor_usable=True,
         )
     )
-    assert "🧪 Poção de Vigor · Grau I" in usable.text
-    assert "Consumível · Vigor" in usable.text
-    assert "⚡ Vigor · +20" in usable.text
-    assert "🌙 Uso · Fora de Combate" in usable.text
+    assert "🧪 <b>Poção de Vigor</b>" in usable.text
+    assert "<code>Consumível · Vigor</code>" in usable.text
+    assert "⚡ <b>Vigor</b> · <code>+20</code>" in usable.text
+    assert "🌙 <b>Uso</b> · <code>Fora de Combate</code>" in usable.text
     assert [button.text for row in usable.keyboard.inline_keyboard for button in row] == [
         "Usar",
-        "← Consumíveis",
+        "↩️ Retornar",
     ]
     assert _callbacks(usable)[0] == "consumable:vigor:consumable.vigor.tdo.i"
 
@@ -105,7 +108,7 @@ def test_vigor_detail_only_exposes_use_when_backend_marks_it_available():
         )
     )
     assert [button.text for row in unavailable.keyboard.inline_keyboard for button in row] == [
-        "← Consumíveis"
+        "↩️ Retornar"
     ]
 
 

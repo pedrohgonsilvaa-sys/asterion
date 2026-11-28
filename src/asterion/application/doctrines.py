@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -31,7 +31,7 @@ from asterion.application.weapon_proficiency import (
 )
 from asterion.domain.arts import active_art_definition, weapon_requirement_satisfied
 from asterion.domain.economy import crowns_per_level, path_switch_cost
-from asterion.domain.equipment import EquipmentSlot, parse_equipment_slot
+from asterion.domain.equipment import EquipmentSlot, assignment_for_item_slot, parse_equipment_slot
 from asterion.domain.paths import path_belongs_to_class
 from asterion.domain.talents import (
     TalentSelectionError,
@@ -55,6 +55,16 @@ from asterion.infrastructure.db.models import (
 
 MAX_DOCTRINES = BASE_DOCTRINES
 MAX_DOCTRINE_NAME_CHARACTERS = 40
+DOCTRINE_NUMERALS = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
+
+
+def system_doctrine_name(index: int) -> str:
+    """Nomes definidos pelo sistema: Doutrina I, II, III…; o jogador não os edita."""
+    return f"Doutrina {DOCTRINE_NUMERALS[index]}"
+
+
+INITIAL_DOCTRINES = 3
+EMPTY_CONFIGURATION = {"path": None, "equipment": {}, "arts": {}, "talents": []}
 SAFE_CONFIGURATION_LOCATIONS = frozenset({"Refúgio do Ocaso"})
 COMPLETED_TRIAL_UNLOCK = "class_trial_completed"
 
@@ -63,6 +73,16 @@ class DoctrineRejected(RuntimeError):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True, slots=True)
+class DoctrineEquipmentLine:
+    """Peça salva numa Doutrina, com o que a tela de Equipamentos mostra dela."""
+
+    slot: str
+    name: str | None
+    rarity: str | None = None
+    contribution: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +95,9 @@ class DoctrineView:
     incomplete_reason: str | None
     can_apply: bool
     equipment_names: tuple[tuple[str, str | None], ...] = ()
+    # Doutrina marcada como ativa no banco (não inferida pela build).
+    is_active: bool = False
+    equipment_lines: tuple[DoctrineEquipmentLine, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +151,33 @@ def _canonical(value: dict) -> dict:
     }
 
 
+def _equipment_details(item: EquipmentItem):
+    """(raridade, contribuição) como a tela de Equipamentos calcula; ``(None, None)`` se falhar."""
+    from asterion.application.equipment_view import _localized_rarity
+    from asterion.domain.equipment_stats import (
+        EquipmentConfigurationError,
+        equipment_stat_contribution,
+        item_snapshot_from_persisted,
+    )
+
+    assignment = assignment_for_item_slot(item.slot)
+    if assignment is None:
+        return None, None
+    rarity = _localized_rarity(item.rarity)
+    try:
+        snapshot = item_snapshot_from_persisted(
+            item_instance_id=str(item.id),
+            equipped_slot=assignment.slot.value,
+            item_slot=item.slot,
+            item_level=item.item_level,
+            rarity=rarity,
+            payload=item.payload or {},
+        )
+        return rarity, equipment_stat_contribution(snapshot)
+    except EquipmentConfigurationError:
+        return rarity, None
+
+
 class DoctrineService:
     def __init__(self, sessions: async_sessionmaker[AsyncSession], server_id: str):
         if not server_id or len(server_id) > 64:
@@ -173,6 +223,7 @@ class DoctrineService:
                 else []
             )
             item_names = {str(item.id): item.item_name for item in item_rows}
+            item_details = {str(item.id): _equipment_details(item) for item in item_rows}
             doctrines = []
             for row in rows:
                 config = _canonical(row.configuration or {})
@@ -192,6 +243,15 @@ class DoctrineService:
                             (slot, item_names.get(item_id))
                             for slot, item_id in config["equipment"].items()
                         ),
+                        row.is_active,
+                        tuple(
+                            DoctrineEquipmentLine(
+                                slot,
+                                item_names.get(item_id),
+                                *item_details.get(item_id, (None, None)),
+                            )
+                            for slot, item_id in config["equipment"].items()
+                        ),
                     )
                 )
             return DoctrineCollectionView(
@@ -206,6 +266,106 @@ class DoctrineService:
                 character.level,
                 await doctrine_limit(session, character.id),
             )
+
+    async def ensure_doctrines(self, actor: int) -> None:
+        """Garante as Doutrinas do sistema (I, II, III…), vazias, e uma Doutrina ativa.
+
+        Doutrinas antigas, com nome escolhido pelo jogador, passam a usar os nomes do
+        sistema, pela ordem de criação. Sem Doutrina ativa registrada, a primeira cuja
+        build já é a configuração atual é marcada uma única vez; depois disso a Doutrina
+        ativa é sempre a registrada no banco.
+        """
+        async with self.sessions.begin() as session:
+            character = await session.scalar(
+                select(Character)
+                .where(Character.telegram_id == actor, Character.server_id == self.server_id)
+                .with_for_update()
+            )
+            if character is None:
+                return
+            rows = list(
+                (
+                    await session.scalars(
+                        select(CharacterDoctrine)
+                        .where(CharacterDoctrine.character_id == character.id)
+                        .order_by(CharacterDoctrine.created_at, CharacterDoctrine.id)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+            # 3 Doutrinas iniciais; espaços extras liberados por outras mecânicas somam.
+            unlocked = max(0, await doctrine_limit(session, character.id) - BASE_DOCTRINES)
+            limit = min(max(INITIAL_DOCTRINES + unlocked, len(rows)), len(DOCTRINE_NUMERALS))
+            renamed = [
+                (row, system_doctrine_name(index))
+                for index, row in enumerate(rows[:limit])
+                if row.name != system_doctrine_name(index)
+            ]
+            for row, _ in renamed:
+                row.name = f"~{row.id.hex}"
+            if renamed:
+                await session.flush()
+                for row, name in renamed:
+                    row.name = name
+            for index in range(len(rows), limit):
+                row = CharacterDoctrine(
+                    character_id=character.id,
+                    name=system_doctrine_name(index),
+                    configuration=dict(EMPTY_CONFIGURATION),
+                    revision=0,
+                    # Instantes distintos mantêm a ordem I, II, III na listagem.
+                    created_at=datetime.now(UTC) + timedelta(microseconds=index),
+                )
+                session.add(row)
+                rows.append(row)
+            await session.flush()
+            if not any(row.is_active for row in rows):
+                current = await self._current_configuration(session, character)
+                match = next(
+                    (row for row in rows if _canonical(row.configuration or {}) == current), None
+                )
+                if match is not None:
+                    match.is_active = True
+                    await session.flush()
+
+    async def activate(
+        self,
+        actor: int,
+        doctrine_id: UUID,
+        expected_revision: int,
+        expected_configuration_version: int,
+    ) -> DoctrineMutation | None:
+        """Ativa a Doutrina: grátis e imediato, sem exigir local nem trocar de Caminho."""
+        async with self.sessions.begin() as session:
+            character = await self._lock_character(session, actor)
+            if character is None:
+                return None
+            self._check_version(character, expected_configuration_version)
+            row = await self._doctrine(session, character.id, doctrine_id, lock=True)
+            if row is None or row.revision != expected_revision:
+                raise DoctrineRejected("stale_doctrine")
+            changed = await self._install_row(session, character, row)
+            await session.execute(
+                update(CharacterDoctrine)
+                .where(CharacterDoctrine.character_id == character.id)
+                .values(is_active=False)
+            )
+            await session.flush()
+            row.is_active = True
+            return DoctrineMutation(changed, character.combat_configuration_version, row.id)
+
+    async def _install_row(self, session, character, row: CharacterDoctrine) -> bool:
+        """Aplica a build salva ao personagem mantendo o Caminho atual; ``False`` se igual."""
+        target = _canonical(row.configuration or {})
+        target["path"] = character.selected_path
+        current = await self._current_configuration(session, character, lock_rows=True)
+        reason = await self._incomplete_reason(session, character, target)
+        if reason:
+            raise DoctrineRejected(reason)
+        if target == current:
+            return False
+        await self._install(session, character, target)
+        return True
 
     async def create(
         self, actor: int, name: str, expected_configuration_version: int
@@ -539,6 +699,9 @@ class DoctrineService:
             row.configuration = updated_configuration
             row.revision += 1
             row.updated_at = datetime.now(UTC)
+            if row.is_active:
+                # Doutrina ativa: a edição vale já para o personagem.
+                await self._install_row(session, character, row)
             return DoctrineMutation(True, character.combat_configuration_version, row.id)
 
     async def apply(
@@ -608,100 +771,101 @@ class DoctrineService:
             if character.crowns < cost:
                 raise DoctrineRejected("insufficient_crowns")
 
-            equipment = {
-                EquipmentSlot(key): UUID(value) for key, value in target["equipment"].items()
-            }
-            item_ids = tuple(sorted(set(equipment.values()), key=str))
-            item_rows = (
-                list(
-                    (
-                        await session.scalars(
-                            select(EquipmentItem)
-                            .where(
-                                EquipmentItem.character_id == character.id,
-                                EquipmentItem.id.in_(item_ids),
-                            )
-                            .order_by(EquipmentItem.id)
-                            .with_for_update()
-                        )
-                    ).all()
-                )
-                if item_ids
-                else []
+            await self._install(
+                session, character, target, cost=cost, target_talents=target_talents
             )
-            item_by_id = {item.id: item for item in item_rows}
-            if len(item_by_id) != len(item_ids):
-                raise DoctrineRejected("item_unavailable")
-            owned = await owned_families(session, character.id)
-            for item in item_rows:
-                eligibility = await weapon_eligibility(session, character, item, owned)
-                if eligibility != WeaponEligibility.ALLOWED:
-                    raise DoctrineRejected(f"weapon_{eligibility.value}")
-            art_map = {int(slot): art_id for slot, art_id in target["arts"].items()}
-            if len(set(art_map.values())) != len(art_map):
-                raise DoctrineRejected("duplicate_art")
-            for art_id in art_map.values():
-                definition = active_art_definition(art_id)
-                if (
-                    definition is None
-                    or definition.character_class != character.character_class
-                    or character.level < definition.min_level
-                    or (definition.path_id is not None and definition.path_id != target["path"])
-                ):
-                    raise DoctrineRejected("invalid_art")
-            if target["path"] is not None and not await self._trial_completed(
-                session, character.id
-            ):
-                raise DoctrineRejected("trial_required")
-
-            character.crowns -= cost
-            character.selected_path = target["path"]
-            await session.execute(
-                delete(CharacterEquipmentSlot).where(
-                    CharacterEquipmentSlot.character_id == character.id
-                )
-            )
-            await session.execute(
-                delete(CharacterActiveArtSlot).where(
-                    CharacterActiveArtSlot.character_id == character.id
-                )
-            )
-            await session.execute(
-                delete(CharacterTalentChoice).where(
-                    CharacterTalentChoice.character_id == character.id
-                )
-            )
-            await session.flush()
-            for slot, item_id in equipment.items():
-                session.add(
-                    CharacterEquipmentSlot(
-                        character_id=character.id, slot=slot.value, equipment_item_id=item_id
-                    )
-                )
-            for slot, art_id in art_map.items():
-                session.add(
-                    CharacterActiveArtSlot(character_id=character.id, slot=slot, art_id=art_id)
-                )
-            for talent in target_talents:
-                session.add(
-                    CharacterTalentChoice(
-                        character_id=character.id,
-                        point_slot=talent["point_slot"],
-                        talent_id=talent["talent_id"],
-                        publicly_acquired=True,
-                    )
-                )
-            await session.flush()
-            try:
-                new_configuration = await load_equipment_configuration(session, character)
-                stats = resolve_character_combat_stats(character, new_configuration)
-            except ValueError as exc:
-                raise DoctrineRejected("invalid_configuration") from exc
-            character.hp = hp_after_equipment_change(character, stats.hp)
-            character.max_hp = stats.hp
-            character.combat_configuration_version += 1
-            await session.flush()
             return DoctrineMutation(True, character.combat_configuration_version, row.id)
+
+    async def _install(
+        self, session, character, target: dict, *, cost: int = 0, target_talents=None
+    ) -> None:
+        """Grava a configuração ``target`` no personagem (Equipamentos, Artes e Talentos)."""
+        target_talents = target["talents"] if target_talents is None else target_talents
+        equipment = {EquipmentSlot(key): UUID(value) for key, value in target["equipment"].items()}
+        item_ids = tuple(sorted(set(equipment.values()), key=str))
+        item_rows = (
+            list(
+                (
+                    await session.scalars(
+                        select(EquipmentItem)
+                        .where(
+                            EquipmentItem.character_id == character.id,
+                            EquipmentItem.id.in_(item_ids),
+                        )
+                        .order_by(EquipmentItem.id)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+            if item_ids
+            else []
+        )
+        item_by_id = {item.id: item for item in item_rows}
+        if len(item_by_id) != len(item_ids):
+            raise DoctrineRejected("item_unavailable")
+        owned = await owned_families(session, character.id)
+        for item in item_rows:
+            eligibility = await weapon_eligibility(session, character, item, owned)
+            if eligibility != WeaponEligibility.ALLOWED:
+                raise DoctrineRejected(f"weapon_{eligibility.value}")
+        art_map = {int(slot): art_id for slot, art_id in target["arts"].items()}
+        if len(set(art_map.values())) != len(art_map):
+            raise DoctrineRejected("duplicate_art")
+        for art_id in art_map.values():
+            definition = active_art_definition(art_id)
+            if (
+                definition is None
+                or definition.character_class != character.character_class
+                or character.level < definition.min_level
+                or (definition.path_id is not None and definition.path_id != target["path"])
+            ):
+                raise DoctrineRejected("invalid_art")
+        if target["path"] is not None and not await self._trial_completed(session, character.id):
+            raise DoctrineRejected("trial_required")
+
+        character.crowns -= cost
+        character.selected_path = target["path"]
+        await session.execute(
+            delete(CharacterEquipmentSlot).where(
+                CharacterEquipmentSlot.character_id == character.id
+            )
+        )
+        await session.execute(
+            delete(CharacterActiveArtSlot).where(
+                CharacterActiveArtSlot.character_id == character.id
+            )
+        )
+        await session.execute(
+            delete(CharacterTalentChoice).where(CharacterTalentChoice.character_id == character.id)
+        )
+        await session.flush()
+        for slot, item_id in equipment.items():
+            session.add(
+                CharacterEquipmentSlot(
+                    character_id=character.id, slot=slot.value, equipment_item_id=item_id
+                )
+            )
+        for slot, art_id in art_map.items():
+            session.add(CharacterActiveArtSlot(character_id=character.id, slot=slot, art_id=art_id))
+        for talent in target_talents:
+            session.add(
+                CharacterTalentChoice(
+                    character_id=character.id,
+                    point_slot=talent["point_slot"],
+                    talent_id=talent["talent_id"],
+                    publicly_acquired=True,
+                )
+            )
+        await session.flush()
+        try:
+            new_configuration = await load_equipment_configuration(session, character)
+            stats = resolve_character_combat_stats(character, new_configuration)
+        except ValueError as exc:
+            raise DoctrineRejected("invalid_configuration") from exc
+        character.hp = hp_after_equipment_change(character, stats.hp)
+        character.max_hp = stats.hp
+        character.combat_configuration_version += 1
+        await session.flush()
 
     async def _current_configuration(self, session, character, *, lock_rows=False) -> dict:
         snapshot = await load_equipment_configuration(session, character, lock_rows=lock_rows)
@@ -838,10 +1002,7 @@ class DoctrineService:
             validated_talents = validate_talent_choices(
                 character.character_class,
                 character.level,
-                [
-                    (item["point_slot"], item["talent_id"])
-                    for item in talents
-                ],
+                [(item["point_slot"], item["talent_id"]) for item in talents],
             )
         except (KeyError, TypeError, TalentSelectionError):
             return "invalid_talents"

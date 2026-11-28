@@ -101,6 +101,37 @@ EQUIPMENT_SLOT_DESCRIPTIONS = {
     ),
 }
 
+CONSUMABLE_DESCRIPTIONS = {
+    "healing": (
+        "Um preparo de ervas e essências que fecha ferimentos recentes. Seu efeito é "
+        "imediato e basta o gesto de ingeri-lo."
+    ),
+    "purification": (
+        "Uma essência clara que dissolve males que ainda se agarram ao corpo. Limpa o "
+        "organismo de maldições passageiras."
+    ),
+    "antidote": (
+        "Um preparo amargo que combate venenos e queimaduras persistentes. Interrompe o "
+        "mal antes que ele consuma quem o sofre."
+    ),
+    "vigor": (
+        "Uma infusão forte que devolve fôlego a quem já cansou de caminhar. Renova a "
+        "disposição para a jornada."
+    ),
+    "protection": (
+        "Um tônico que endurece o corpo por instantes, formando uma camada de proteção "
+        "contra o próximo golpe."
+    ),
+    "dispeller": (
+        "Um pó volátil lançado contra o inimigo, capaz de desfazer proteções e "
+        "fortalecimentos que ele sustenta."
+    ),
+    "warding": (
+        "Um amuleto de uso único que guarda o portador contra a primeira influência hostil "
+        "que o alcançar."
+    ),
+}
+
 RUNE_DESCRIPTION = (
     "Um fragmento gravado com símbolos antigos, feito para ser encaixado em equipamentos. "
     "Sua marca reforça o objeto que a recebe."

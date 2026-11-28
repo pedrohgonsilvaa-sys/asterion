@@ -44,15 +44,13 @@ from asterion.bot.doctrines_ui import (
     render_doctrine_detail,
     render_doctrine_root,
     render_editor,
-    render_name_prompt,
     render_talent_page,
 )
 from asterion.bot.inventory_ui import render_material_detail
 from asterion.domain.arts import SENTINEL_ART_IDS, VIGIA_ART_IDS
-from asterion.domain.economy import crowns_per_level
 from asterion.domain.talents import TALENTS_BY_CLASS, talent_points_at_level
-from asterion.infrastructure.db.models import Character
-from tests.test_character_surfaces_telegram import _button, _last_screen, _message_update
+from asterion.infrastructure.db.models import Character, CharacterTalentChoice
+from tests.test_character_surfaces_telegram import _button, _last_screen
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
@@ -86,7 +84,9 @@ def _collection(*doctrines: DoctrineView, level: int = 1, current=None) -> Doctr
     )
 
 
-def _doctrine(name: str, *, current=False, arts=None, talents=(), equipment=None, names=()):
+def _doctrine(
+    name: str, *, current=False, arts=None, talents=(), equipment=None, names=(), active=False
+):
     return DoctrineView(
         doctrine_id=uuid4(),
         name=name,
@@ -104,48 +104,66 @@ def _doctrine(name: str, *, current=False, arts=None, talents=(), equipment=None
         incomplete_reason=None,
         can_apply=not current,
         equipment_names=names,
+        is_active=active,
     )
 
 
 # --- Doutrinas (Parte II) ---------------------------------------------------------
 
 
-def test_doctrine_root_has_symmetric_columns_and_a_single_doctrine_in_use():
+def test_doctrine_root_lists_system_names_and_the_registered_active_one():
     doctrines = (
-        _doctrine("PvE", current=True),
-        _doctrine("PvP", current=True),  # mesma build: só uma fica 🟢
-        _doctrine("Caçada"),
-        _doctrine("Arena"),
+        _doctrine("Doutrina I"),
+        _doctrine("Doutrina II", active=True),
+        _doctrine("Doutrina III"),
     )
     screen = render_doctrine_root(_collection(*doctrines))
-    assert screen.text.startswith("<b>🗂️ Doutrinas</b>\n\n<i>Crie e salve diferentes")
-    assert screen.text.count("🟢") == 1 and screen.text.count("🔴") == 3
-    assert "Ativa" not in screen.text and "Inativa" not in screen.text
-    # Duas colunas de largura fixa e igual: cada nome ocupa a largura do maior.
-    assert "🟢 <code>PvE   </code>  🔴 <code>PvP   </code>" in screen.text
-    assert "🔴 <code>Caçada</code>  🔴 <code>Arena </code>" in screen.text
-    assert "⚠️ Pode criar diferentes Doutrinas" in screen.text
-    assert _labels(screen) == [
-        ["🟢 PvE", "🔴 PvP"],
-        ["🔴 Caçada", "🔴 Arena"],
-        ["➕ Criar"],
-        ["↩️ Retornar"],
-    ]
-    # Selecionar uma Doutrina abre direto a Configuração (doc:d).
+    assert screen.text == (
+        "<b>🗂️ Doutrinas</b>\n\n<i>Crie e mantenha diferentes configurações para usar em "
+        "diferentes situações. Cada Doutrina reúne seus Equipamentos, Artes e Talentos em "
+        "uma única build.</i>\n\n<b>📜 Lista de Doutrinas</b>\n\n"
+        "#1 ⛔️ <b>Doutrina I</b>\n#2 ✅ <b>Doutrina II</b> · <code>Ativada</code>\n"
+        "#3 ⛔️ <b>Doutrina III</b>"
+    )
+    assert _labels(screen) == [["1️⃣", "2️⃣", "3️⃣"], ["↩️ Retornar"]]
     assert all(
         button.callback_data.startswith("doc:d:")
-        for row in screen.keyboard.inline_keyboard[:2]
-        for button in row
+        for button in screen.keyboard.inline_keyboard[0]
     )
 
 
-def test_doctrine_root_hides_create_at_the_limit():
-    doctrines = tuple(_doctrine(f"D{index}") for index in range(5))
-    assert "➕ Criar" not in _flat(render_doctrine_root(_collection(*doctrines)))
+def test_doctrine_detail_pages_and_buttons_for_inactive_and_active():
+    inactive = _doctrine("Doutrina I")
+    first = render_doctrine_detail(_collection(inactive), inactive)
+    assert first.text.startswith(
+        "<b>🗂️ Doutrina I</b>\n\n<i>Esta Doutrina reúne uma configuração independente"
+    )
+    assert "⛔️ <b>Status</b> · <code>Inativa</code>\n📄 <b>Página</b> · <code>1/2</code>" in (
+        first.text
+    )
+    assert "✋ <b>Principal</b> · Vazio\n\n🤚 <b>Secundária</b> · Vazio" in first.text
+    assert "🧿 <b>Artes</b>\n\n⛔️ Vazio\n⛔️ Vazio\n⛔️ Vazio" in first.text
+    assert _labels(first) == [["✅ Ativar", "✏️ Editar"], ["▶️ Próxima"], ["↩️ Retornar"]]
+    second = render_doctrine_detail(_collection(inactive), inactive, 2)
+    assert "<code>2/2</code>" in second.text
+    assert "🌳 <b>Talentos</b>\n\n⛔️ Vazio\n⛔️ Vazio\n⛔️ Vazio" in second.text
+    assert _labels(second) == [["✅ Ativar", "✏️ Editar"], ["◀️ Anterior"], ["↩️ Retornar"]]
+
+    active = _doctrine(
+        "Doutrina II", active=True, arts={"1": SENTINEL_ART_IDS["golpe_de_guarda"]}
+    )
+    shown = render_doctrine_detail(_collection(active), active)
+    assert "✅ <b>Status</b> · <code>Ativada</code>" in shown.text
+    assert "⚔️ Golpe de Guarda\n⛔️ Vazio\n⛔️ Vazio" in shown.text
+    assert _labels(shown) == [["✏️ Editar", "▶️ Próxima"], ["↩️ Retornar"]]
+    assert _labels(render_doctrine_detail(_collection(active), active, 2)) == [
+        ["✏️ Editar", "◀️ Anterior"],
+        ["↩️ Retornar"],
+    ]
 
 
-def test_doctrine_configuration_lists_every_active_talent_without_path_or_slot():
-    talents = (
+def test_doctrine_detail_shows_the_complete_talent_distribution_beyond_three():
+    names = (
         "Aço Desperto",
         "Ponta Revidada",
         "Firme sob Impacto",
@@ -153,42 +171,27 @@ def test_doctrine_configuration_lists_every_active_talent_without_path_or_slot()
         "Vigília",
         "Persistência",
     )
-    doctrine = _doctrine(
-        "PvE",
-        arts={"1": SENTINEL_ART_IDS["golpe_de_guarda"]},
-        talents=[_talent(name) for name in talents],
-        equipment={"Principal": str(uuid4())},
-        names=(("Principal", "Espada"),),
-    )
-    screen = render_doctrine_detail(_collection(doctrine, level=60), doctrine)
-    text = screen.text
-    assert text.startswith("<b>⚙️ Configuração</b>")
-    assert "⚔️ <b>Principal</b> · <code>Espada</code>" in text
-    assert "🔮 <b>Artefato</b> · <code>Vazio</code>" in text
-    assert "1️⃣ <code>Golpe de Guarda</code>\n2️⃣ <code>Vazio</code>" in text
-    # Quantidade dinâmica: os seis Talentos ativos ficam na própria tela, sem os 18.
-    for name in talents:
-        assert f"<code>{name}</code>" in text
-    assert "6️⃣ <code>Persistência</code>" in text
-    assert "Carne de Pedra" not in text
-    assert "Caminho" not in text and "Slot" not in text
-    assert _labels(screen) == [["✅ Usar", "✏️ Editar"], ["🗑️ Excluir"], ["↩️ Retornar"]]
+    doctrine = _doctrine("Doutrina I", talents=[_talent(name) for name in names])
+    screen = render_doctrine_detail(_collection(doctrine, level=60), doctrine, 2)
+    for name in names:
+        assert f"🌿 {name}" in screen.text
+    assert "⛔️ Vazio" not in screen.text and "Carne de Pedra" not in screen.text
 
 
-def test_doctrine_editor_name_and_arts_use_closed_terms():
-    doctrine = _doctrine("PvE")
+def test_doctrine_editor_pages_and_closed_terms():
+    doctrine = _doctrine("Doutrina I")
     view = _collection(doctrine)
     editor = render_editor(view, doctrine)
-    assert editor.text.startswith("<b>✏️ Editar Doutrina</b>")
+    assert editor.text.startswith(
+        "<b>✏️ Editar Doutrina I</b>\n\n<i>Escolha qual parte da configuração deseja editar."
+    )
+    assert "<code>1/2</code>" in editor.text and "Status" not in editor.text
     assert _labels(editor) == [
-        ["✏️ Nome", "🛡️ Equipamentos"],
-        ["🧿 Artes", "🌿 Talentos"],
+        ["🛡️ Equipamentos", "🧿 Artes"],
+        ["🌳 Talentos", "▶️ Próxima"],
         ["↩️ Retornar"],
     ]
-    assert "Símbolo" not in editor.text and "Caminho" not in editor.text
-    prompt = render_name_prompt("doc:r")
-    assert "✏️ Envie o novo nome da Doutrina." in prompt.text
-    assert _labels(prompt) == [["↩️ Retornar"]]
+    assert _labels(render_editor(view, doctrine, 2))[1] == ["🌳 Talentos", "◀️ Anterior"]
     arts = render_art_slots(view, doctrine)
     assert _labels(arts) == [["⚔️ Arte 1"], ["⚔️ Arte 2"], ["⚔️ Arte 3"], ["↩️ Retornar"]]
     assert "Slot" not in arts.text and "Slot" not in "".join(_flat(arts))
@@ -546,13 +549,13 @@ def _bot(actor: int) -> Bot:
 
 
 @pytest.mark.asyncio
-async def test_doctrine_create_rename_talents_use_cost_and_delete_flow(database):
+async def test_doctrines_seed_activate_for_free_and_apply_edits_of_the_active_one(database):
     actor, _ = await _seed_road(database, actor=893401)
     sessions = database[1]
     async with sessions.begin() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
         character.level = 15
-        character.crowns = 50_000
+        character.crowns = 0
     service = DoctrineService(sessions, "ocaso")
     dispatcher = Dispatcher(disable_fsm=True)
     dispatcher.include_router(doctrines_router(service, {}))
@@ -560,76 +563,76 @@ async def test_doctrine_create_rename_talents_use_cost_and_delete_flow(database)
     update = iter(range(1, 200))
 
     async def tap(data):
-        await dispatcher.feed_raw_update(bot, callback_update(data, actor=actor,
-                                                              update_id=next(update)))
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, actor=actor, update_id=next(update))
+        )
         return _last_screen(bot)
 
     async def tap_label(screen, label):
         return await tap(_button(screen, label).callback_data)
 
-    async def send(text):
-        await dispatcher.feed_raw_update(
-            bot, _message_update(text, actor=actor, update_id=next(update))
-        )
-        return _last_screen(bot)
+    async def talents_of_character():
+        async with sessions() as session:
+            character = await session.scalar(
+                select(Character).where(Character.telegram_id == actor)
+            )
+            return character.crowns, [
+                row.talent_id
+                for row in (
+                    await session.scalars(
+                        select(CharacterTalentChoice).where(
+                            CharacterTalentChoice.character_id == character.id
+                        )
+                    )
+                ).all()
+            ]
 
     root = await tap("character:doctrines")
     assert "<b>🗂️ Doutrinas</b>" in root.text
-    prompt = await tap_label(root, "➕ Criar")
-    assert "✏️ Envie o novo nome da Doutrina." in prompt.text
-    root = await send("Build de Caça")  # nome com espaços
-    assert "🟢 <code>Build de Caça</code>" in root.text
-    await tap_label(root, "➕ Criar")
-    root = await send("PvP")
-    assert root.text.count("🟢") == 1 and "🔴 <code>PvP" in root.text
+    names = [item.name for item in (await service.view(actor)).doctrines]
+    assert names == ["Doutrina I", "Doutrina II", "Doutrina III"]
+    assert _labels(root) == [["1️⃣", "2️⃣", "3️⃣"], ["↩️ Retornar"]]
 
-    configuration = await tap_label(root, "🔴 PvP")
-    assert configuration.text.startswith("<b>⚙️ Configuração</b>")
-    editor = await tap_label(configuration, "✏️ Editar")
-    await tap_label(editor, "✏️ Nome")
-    editor = await send("Arena Alta")
-    assert editor.text.startswith("<b>✏️ Editar Doutrina</b>")
-    assert [item.name for item in (await service.view(actor)).doctrines] == [
-        "Build de Caça",
-        "Arena Alta",
-    ]
-
-    talents = await tap_label(editor, "🌿 Talentos")
-    points = talent_points_at_level(15)
-    assert f"🎋 <b>Pontos Disponíveis</b> · <code>{points}</code>" in talents.text
+    # Doutrina II: edita os Talentos (inativa) e só então ativa — grátis, sem local.
+    detail = await tap_label(root, "2️⃣")
+    editor = await tap_label(detail, "✏️ Editar")
+    talents = await tap_label(editor, "🌳 Talentos")
     talents = await tap_label(talents, "✨ Aço")
     assert "✅ <code>Aço Desperto</code>" in talents.text
-    assert f"🎋 <b>Pontos Disponíveis</b> · <code>{points - 1}</code>" in talents.text
-    talents = await tap_label(talents, "✅ Aço")  # devolve o ponto
-    assert "✨ <code>Aço Desperto</code>" in talents.text
-    talents = await tap_label(talents, "✨ Aço")
     editor = await tap_label(talents, "↩️ Retornar")
-    configuration = await tap_label(editor, "↩️ Retornar")
-    assert "1️⃣ <code>Aço Desperto</code>" in configuration.text
+    detail = await tap_label(editor, "↩️ Retornar")
+    assert (await talents_of_character())[1] == []
+    activated = await tap_label(detail, "✅ Ativar")
+    assert "✅ <b>Status</b> · <code>Ativada</code>" in activated.text
+    crowns, chosen = await talents_of_character()
+    assert crowns == 0 and chosen == [_talent("Aço Desperto")]
+    view = await service.view(actor)
+    assert [item.is_active for item in view.doctrines] == [False, True, False]
 
-    # Sem custo (só acrescenta Talentos): usa direto e volta às Doutrinas.
-    root = await tap_label(configuration, "✅ Usar")
-    assert "🟢 <code>Arena Alta" in root.text and "🔴 <code>Build de Caça" in root.text
-
-    # Voltar a uma build sem esse Talento cobra a redistribuição: confirmação curta.
-    configuration = await tap_label(root, "🔴 Build de Caça")
-    confirm = await tap_label(configuration, "✅ Usar")
-    cost = 2 * crowns_per_level(15)
-    assert f"<code>{cost:,} Coroas".replace(",", ".") in confirm.text
-    assert "Caminho" not in confirm.text
-    root = await tap_label(confirm, "✅ Confirmar")
-    assert "🟢 <code>Build de Caça" in root.text
-    async with sessions() as session:
-        character = await session.scalar(select(Character).where(Character.telegram_id == actor))
-        assert character.crowns == 50_000 - cost
-
-    configuration = await tap_label(root, "🔴 Arena Alta")
-    root = await tap_label(configuration, "🗑️ Excluir")
-    assert "Arena Alta" not in root.text
-    assert [item.name for item in (await service.view(actor)).doctrines] == ["Build de Caça"]
+    # Editar a Doutrina ativa vale já para o personagem e ela continua ativada.
+    editor = await tap_label(activated, "✏️ Editar")
+    talents = await tap_label(editor, "🌳 Talentos")
+    await tap_label(talents, "✨ Carne")
+    assert sorted((await talents_of_character())[1]) == sorted(
+        [_talent("Aço Desperto"), _talent("Carne de Pedra")]
+    )
+    assert [item.is_active for item in (await service.view(actor)).doctrines] == [
+        False,
+        True,
+        False,
+    ]
+    # Ativar outra Doutrina troca a ativa e a configuração do personagem.
+    root = await tap("doc:r")
+    other = await tap_label(root, "1️⃣")
+    await tap_label(other, "✅ Ativar")
+    assert (await talents_of_character())[1] == []
+    assert [item.is_active for item in (await service.view(actor)).doctrines] == [
+        True,
+        False,
+        False,
+    ]
     for call in bot.session.make_request.call_args_list:
         markup = getattr(call.args[1], "reply_markup", None)
-        assert getattr(markup, "force_reply", None) is None
         for row in getattr(markup, "inline_keyboard", None) or ():
             for button in row:
                 assert len(button.callback_data.encode()) <= 64

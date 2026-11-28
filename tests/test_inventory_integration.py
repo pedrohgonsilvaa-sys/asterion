@@ -259,7 +259,7 @@ async def test_vigor_inventory_callback_revalidates_and_refreshes_the_detail(dat
         ),
     )
     detail = telegram.session.make_request.call_args.args[1]
-    assert "⚡ Vigor · +20" in detail.text
+    assert "⚡ <b>Vigor</b> · <code>+20</code>" in detail.text
     use_callback = detail.reply_markup.inline_keyboard[0][0].callback_data
     assert use_callback == "consumable:vigor:consumable.vigor.tdo.i"
 
@@ -268,7 +268,7 @@ async def test_vigor_inventory_callback_revalidates_and_refreshes_the_detail(dat
         callback_update(use_callback, update_id=892, actor=actor),
     )
     updated_detail = telegram.session.make_request.call_args.args[1]
-    assert "🎒 Quantidade · 0" in updated_detail.text
+    assert "📦 <b>Quantidade</b> · <code>0</code>" in updated_detail.text
     assert all(
         button.text != "Usar"
         for row in updated_detail.reply_markup.inline_keyboard

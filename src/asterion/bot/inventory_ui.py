@@ -1,5 +1,6 @@
 """Telegram rendering for Inventory and Pending read models."""
 
+import re
 from html import escape
 from uuid import UUID
 
@@ -16,7 +17,11 @@ from asterion.bot.ui_format import (
     page_nav,
 )
 from asterion.domain.consumables import grade_label
-from asterion.domain.item_descriptions import RUNE_DESCRIPTION, material_description
+from asterion.domain.item_descriptions import (
+    CONSUMABLE_DESCRIPTIONS,
+    RUNE_DESCRIPTION,
+    material_description,
+)
 
 # UI aprovada: até 6 itens por página, cada um com seu botão numérico.
 PAGE_SIZE = 6
@@ -446,19 +451,25 @@ def render_rune_detail(entry: InventoryEntry) -> Screen:
     )
 
 
+_CONSUMABLE_FIELD = re.compile(r"^(\S+) ([^·]+?) · (.+)$")
+
+
+def _consumable_effect_line(line: str) -> str:
+    """``❤️ Cura · 22% HP Máximo`` → ``❤️ <b>Cura</b> · <code>22% HP Máximo</code>``."""
+    match = _CONSUMABLE_FIELD.match(line)
+    if match is None:
+        return escape(line)
+    emoji, label, value = match.groups()
+    return _field(emoji, label, value)
+
+
 def _render_consumable_detail(view: InventoryView) -> Screen:
     entry = view.entries[0]
     family = (entry.payload or {}).get("family", "")
     label = CONSUMABLE_FAMILY_LABELS.get(family, "Consumível")
     grade = grade_label(entry.grade) if entry.grade is not None else "?"
-    lines = [
-        f"🧪 {escape(entry.title)} · Grau {grade}",
-        f"Consumível · {escape(label)}",
-        "",
-        f"🎒 Quantidade · {entry.quantity}",
-        "",
-        *CONSUMABLE_DETAILS.get(family, ()),
-    ]
+    description = CONSUMABLE_DESCRIPTIONS.get(family)
+    effects = [_consumable_effect_line(line) for line in CONSUMABLE_DETAILS.get(family, ())]
     rows = []
     if family == "vigor" and view.vigor_usable and entry.quantity > 0:
         rows.append(
@@ -474,12 +485,28 @@ def _render_consumable_detail(view: InventoryView) -> Screen:
     rows.append(
         [
             InlineKeyboardButton(
-                text="← Consumíveis",
+                text="↩️ Retornar",
                 callback_data="inventory:category:consumables",
             )
         ]
     )
-    return Screen("\n".join(lines), CHARACTER_SKIN, InlineKeyboardMarkup(inline_keyboard=rows))
+    return Screen(
+        _blocks(
+            f"🧪 <b>{escape(entry.title)}</b>",
+            f"<i>{escape(description)}</i>" if description else None,
+            "\n".join(effects),
+            "\n".join(
+                (
+                    _field("✨", "Grau", grade),
+                    _field("📦", "Quantidade", entry.quantity),
+                )
+            ),
+            _field("🧪", "Tipo", f"Consumível · {label}"),
+        ),
+        CHARACTER_SKIN,
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )
 
 
 def discard_button(kind: str, item_hex: str) -> InlineKeyboardButton:

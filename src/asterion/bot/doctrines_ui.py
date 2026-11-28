@@ -5,10 +5,14 @@ parte da interface nesta versão (§10) e o termo "Slot" não aparece (§4). Tud
 é exibido vem dos dados salvos da Doutrina; nada aqui é exemplo fixo.
 """
 
+from html import escape
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from asterion.application.doctrines import DoctrineCollectionView, DoctrineView
+from asterion.bot.character_progression_ui import _art_emoji
 from asterion.bot.creation_ui import Screen
+from asterion.bot.item_lines import rarity_emoji, stat_line
 from asterion.bot.ui_format import (
     BACK_LABEL,
     blocks,
@@ -54,30 +58,19 @@ REASON_LABELS = {
 
 ROOT_TITLE = "🗂️ Doutrinas"
 ROOT_TEXT = (
-    "Crie e salve diferentes configurações para usar em diferentes situações. Cada "
+    "Crie e mantenha diferentes configurações para usar em diferentes situações. Cada "
     "Doutrina reúne seus Equipamentos, Artes e Talentos em uma única build."
 )
-ROOT_NOTICE = (
-    "⚠️ Pode criar diferentes Doutrinas para adaptar a cada desafio. Apenas uma "
-    "Doutrina pode estar em uso por vez."
+DETAIL_TEXT = (
+    "Esta Doutrina reúne uma configuração independente para seu personagem. Edite os "
+    "componentes da build e ative-a quando quiser utilizá-la."
 )
-IN_USE, OTHER = "🟢", "🔴"
-CONFIG_TITLE = "⚙️ Configuração"
-CONFIG_TEXT = (
-    "Esta Doutrina reúne a configuração que será usada pelo personagem. Edite "
-    "Equipamentos, Artes e Talentos para montar esta build."
-)
+ACTIVE_MARK, INACTIVE_MARK = "✅", "⛔️"
+MIN_TALENT_LINES = 3
 EDIT_TITLE = "✏️ Editar Doutrina"
 EDIT_TEXT = (
-    "Edite os elementos que fazem parte desta build. Você pode alterar o nome, definir "
-    "os Equipamentos, selecionar as Artes e ajustar os Talentos."
+    "Escolha qual parte da configuração deseja editar. As alterações serão salvas nesta Doutrina."
 )
-NAME_TITLE = "✏️ Nome da Doutrina"
-NAME_TEXT = (
-    "O nome identifica esta build entre suas Doutrinas salvas. Escolha um nome que "
-    "ajude a reconhecer rapidamente o estilo de configuração."
-)
-NAME_PROMPT = "✏️ Envie o novo nome da Doutrina."
 ARTS_TITLE = "🧿 Artes da Doutrina"
 ARTS_TEXT = "Escolha quais Artes Ativas farão parte desta build."
 TALENTS_TITLE = "🌿 Talentos da Doutrina"
@@ -86,8 +79,8 @@ TALENT_LEVELS = (5, 15, 25, 35, 45, 55)
 TALENT_LEVELS_PER_PAGE = 3
 TALENT_LOCKED, TALENT_AVAILABLE, TALENT_ACQUIRED = "🔒", "✨", "✅"
 EQUIPMENT_SLOTS = (
-    ("Principal", "⚔️"),
-    ("Secundária", "⚔️"),
+    ("Principal", "✋"),
+    ("Secundária", "🤚"),
     ("Cabeça", "🪖"),
     ("Torso", "🥋"),
     ("Mãos", "🧤"),
@@ -127,10 +120,7 @@ def _screen(*parts: str | None, rows) -> Screen:
 
 def _keys(view: DoctrineCollectionView, doctrine: DoctrineView) -> str:
     """``<id>:<revisão>:<versão da configuração>`` usado pelos callbacks de edição."""
-    return (
-        f"{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}:"
-        f"{b36(view.configuration_version)}"
-    )
+    return f"{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}:{b36(view.configuration_version)}"
 
 
 def art_name(view: DoctrineCollectionView, art_id: str) -> str:
@@ -146,138 +136,135 @@ def art_name(view: DoctrineCollectionView, art_id: str) -> str:
 
 
 def in_use_doctrine(view: DoctrineCollectionView) -> DoctrineView | None:
-    """A Doutrina em uso: a primeira cuja build salva é a configuração atual.
-
-    Apenas uma Doutrina pode estar em uso por vez (§1), mesmo se duas guardarem a
-    mesma build.
-    """
-    return next((item for item in view.doctrines if item.is_current), None)
+    """A Doutrina Ativada: a registrada no banco (no máximo uma por personagem)."""
+    return next((item for item in view.doctrines if item.is_active), None)
 
 
 def render_doctrine_root(view: DoctrineCollectionView) -> Screen:
-    current = in_use_doctrine(view)
-    cells = [
-        (IN_USE if current is not None and item.doctrine_id == current.doctrine_id else OTHER, item)
-        for item in view.doctrines
-    ]
-    listing = None
-    if cells:
-        # Duas colunas de largura fixa e igual: o nome da coluna esquerda ocupa sempre a
-        # largura do maior nome da lista, em monoespaçado (§2, layout simétrico).
-        width = max(len(item.name) for _, item in cells)
-        lines = []
-        for offset in range(0, len(cells), 2):
-            left_mark, left = cells[offset]
-            line = f"{left_mark} {mono(left.name.ljust(width))}"
-            if offset + 1 < len(cells):
-                right_mark, right = cells[offset + 1]
-                line += f"  {right_mark} {mono(right.name.ljust(width))}"
-            lines.append(line)
-        listing = "\n".join(lines)
-    buttons = [
-        _btn(f"{mark} {item.name}", f"doc:d:{item.doctrine_id.hex}:{b36(item.revision)}")
-        for mark, item in cells
-    ]
-    create = (
-        [_btn("➕ Criar", f"doc:n:{b36(view.configuration_version)}")]
-        if len(view.doctrines) < view.limit
-        else []
-    )
+    lines = []
+    buttons = []
+    for position, item in enumerate(view.doctrines, start=1):
+        mark = ACTIVE_MARK if item.is_active else INACTIVE_MARK
+        suffix = f" · {mono('Ativada')}" if item.is_active else ""
+        lines.append(f"#{position} {mark} {bold(item.name)}{suffix}")
+        buttons.append(_btn(keycap(position), f"doc:d:{item.doctrine_id.hex}:{b36(item.revision)}"))
     return _screen(
         bold(ROOT_TITLE),
         narrative(ROOT_TEXT),
-        listing,
-        ROOT_NOTICE,
-        rows=[*pairs(buttons), create, [_btn(BACK_LABEL, "character:root")]],
+        f"{bold('📜 Lista de Doutrinas')}\n\n" + "\n".join(lines) if lines else None,
+        rows=[buttons, [_btn(BACK_LABEL, "character:root")]],
     )
 
 
 def _equipment_lines(doctrine: DoctrineView) -> str:
+    """Mesmo molde da tela de Equipamentos: peça com raridade e atributos, ou ``Vazio``."""
     saved = doctrine.configuration["equipment"]
-    names = dict(doctrine.equipment_names)
-    lines = []
+    details = {line.slot: line for line in doctrine.equipment_lines}
+    blocks_ = []
     for label, emoji in EQUIPMENT_SLOTS:
-        if label in saved:
-            value = names.get(label) or "Indisponível"
-        else:
-            value = EMPTY
-        lines.append(f"{emoji} {bold(label)} · {mono(value)}")
-    return "\n".join(lines)
+        head = f"{emoji} {bold(label)} · "
+        if label not in saved:
+            blocks_.append(head + EMPTY)
+            continue
+        line = details.get(label)
+        if line is None or not line.name:
+            blocks_.append(head + "Indisponível")
+            continue
+        text = [f"{head}{rarity_emoji(line.rarity)} {escape(line.name)}"]
+        if attributes := stat_line(line.contribution):
+            text.append(attributes)
+        blocks_.append("\n".join(text))
+    return "\n\n".join(blocks_)
+
+
+def art_label(view: DoctrineCollectionView, art_id: str) -> str:
+    """``🗡️ Golpe de Guarda``: emoji próprio da Arte e o nome."""
+    definition = active_art_definition(art_id)
+    selected_path = definition.path_id if definition is not None else view.selected_path
+    try:
+        action = class_player_actions(view.character_class, (art_id,), selected_path).get(art_id)
+    except ValueError:
+        action = None
+    emoji = _art_emoji(action) if action is not None else "⚔️"
+    return f"{emoji} {escape(art_name(view, art_id))}"
 
 
 def _art_lines(view: DoctrineCollectionView, doctrine: DoctrineView) -> str:
     arts = doctrine.configuration["arts"]
     return "\n".join(
-        f"{keycap(slot)} {mono(art_name(view, arts[str(slot)]) if str(slot) in arts else EMPTY)}"
+        art_label(view, arts[str(slot)]) if str(slot) in arts else f"⛔️ {EMPTY}"
         for slot in (1, 2, 3)
     )
 
 
 def _talent_lines(doctrine: DoctrineView) -> str:
-    """Só os Talentos distribuídos nesta Doutrina, todos na própria tela (§3)."""
+    """Distribuição completa salva (até 12 no Nv.60); com menos de 3, completa com Vazio."""
     talents = sorted(doctrine.configuration["talents"], key=lambda item: item["point_slot"])
-    if not talents:
-        return mono(EMPTY)
     lines = []
-    for position, item in enumerate(talents, start=1):
+    for item in talents:
         definition = TALENT_DEFINITIONS.get(item["talent_id"])
-        name = definition.name if definition else "Indisponível"
-        lines.append(f"{keycap(position)} {mono(name)}")
+        lines.append(f"🌿 {escape(definition.name if definition else 'Indisponível')}")
+    lines.extend(f"⛔️ {EMPTY}" for _ in range(max(0, MIN_TALENT_LINES - len(lines))))
     return "\n".join(lines)
 
 
-def render_doctrine_detail(view: DoctrineCollectionView, doctrine: DoctrineView) -> Screen:
-    """Configuração da Doutrina, aberta direto ao selecioná-la (§3 e §9)."""
+def _doctrine_page(
+    view: DoctrineCollectionView, doctrine: DoctrineView, page: int, *, editing: bool
+) -> list[str]:
+    status = (
+        f"{ACTIVE_MARK} {bold('Status')} · {mono('Ativada')}"
+        if doctrine.is_active
+        else f"{INACTIVE_MARK} {bold('Status')} · {mono('Inativa')}"
+    )
+    header = [f"📄 {bold('Página')} · {mono(f'{page}/2')}"]
+    if not editing:
+        header.insert(0, status)
+    if page == 1:
+        body = [
+            f"🛡️ {bold('Equipamentos')}\n\n{_equipment_lines(doctrine)}",
+            f"🧿 {bold('Artes')}\n\n{_art_lines(view, doctrine)}",
+        ]
+    else:
+        body = [f"🌳 {bold('Talentos')}\n\n{_talent_lines(doctrine)}"]
+    return ["\n".join(header), *body]
+
+
+def render_doctrine_detail(
+    view: DoctrineCollectionView, doctrine: DoctrineView, page: int = 1
+) -> Screen:
+    """Doutrina em duas páginas: Equipamentos e Artes; depois Talentos."""
     keys = _keys(view, doctrine)
+    identity = f"{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}"
+    page = 2 if page == 2 else 1
+    edit = _btn("✏️ Editar", f"doc:ed:{keys}")
+    activate = [] if doctrine.is_active else [_btn("✅ Ativar", f"doc:u:{keys}")]
+    if page == 1:
+        nav = _btn("▶️ Próxima", f"doc:dq:{identity}")
+    else:
+        nav = _btn("◀️ Anterior", f"doc:d:{identity}")
+    first = [*activate, edit]
+    rows = [first, [nav]] if not doctrine.is_active else [[edit, nav]]
     return _screen(
-        bold(CONFIG_TITLE),
-        narrative(CONFIG_TEXT),
-        f"🛡️ {bold('Equipamentos')}\n\n{_equipment_lines(doctrine)}",
-        f"🧿 {bold('Artes')}\n\n{_art_lines(view, doctrine)}",
-        f"🌿 {bold('Talentos')}\n\n{_talent_lines(doctrine)}",
-        rows=[
-            [_btn("✅ Usar", f"doc:u:{keys}"), _btn("✏️ Editar", f"doc:ed:{keys}")],
-            [_btn("🗑️ Excluir", f"doc:x:{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}")],
-            [_btn(BACK_LABEL, "doc:r")],
-        ],
+        bold(f"🗂️ {doctrine.name}"),
+        narrative(DETAIL_TEXT),
+        *_doctrine_page(view, doctrine, page, editing=False),
+        rows=[*rows, [_btn(BACK_LABEL, "doc:r")]],
     )
 
 
-def render_apply_preview(view: DoctrineCollectionView, doctrine: DoctrineView, cost: int) -> Screen:
-    """Confirmação só quando usar a Doutrina custa Coroas (decisão do autor 2026-11-27)."""
+def render_editor(view: DoctrineCollectionView, doctrine: DoctrineView, page: int = 1) -> Screen:
     keys = _keys(view, doctrine)
+    page = 2 if page == 2 else 1
+    nav = _btn("▶️ Próxima", f"doc:e2:{keys}") if page == 1 else _btn("◀️ Anterior", f"doc:ed:{keys}")
     return _screen(
-        bold("✅ Usar Doutrina"),
-        f"🗂️ {bold('Doutrina')} · {mono(doctrine.name)}\n"
-        f"🪙 {bold('Custo')} · {mono(f'{cost:,} Coroas'.replace(',', '.'))}",
-        rows=[
-            [_btn("✅ Confirmar", f"doc:ok:{keys}")],
-            [_btn(BACK_LABEL, f"doc:d:{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}")],
-        ],
-    )
-
-
-def render_editor(view: DoctrineCollectionView, doctrine: DoctrineView) -> Screen:
-    keys = _keys(view, doctrine)
-    return _screen(
-        bold(EDIT_TITLE),
+        bold(f"✏️ Editar {doctrine.name}"),
         narrative(EDIT_TEXT),
+        *_doctrine_page(view, doctrine, page, editing=True),
         rows=[
-            [_btn("✏️ Nome", f"doc:nm:{keys}"), _btn("🛡️ Equipamentos", f"doc:es:{keys}")],
-            [_btn("🧿 Artes", f"doc:as:{keys}"), _btn("🌿 Talentos", f"doc:ts:{keys}:0")],
+            [_btn("🛡️ Equipamentos", f"doc:es:{keys}"), _btn("🧿 Artes", f"doc:as:{keys}")],
+            [_btn("🌳 Talentos", f"doc:ts:{keys}:0"), nav],
             [_btn(BACK_LABEL, f"doc:d:{doctrine.doctrine_id.hex}:{b36(doctrine.revision)}")],
         ],
-    )
-
-
-def render_name_prompt(back_callback: str, notice: str | None = None) -> Screen:
-    """Pedido de nome na própria tela (§7): sem confirmação adicional."""
-    return _screen(
-        bold(NAME_TITLE),
-        narrative(NAME_TEXT),
-        notice,
-        NAME_PROMPT,
-        rows=[[_btn(BACK_LABEL, back_callback)]],
     )
 
 

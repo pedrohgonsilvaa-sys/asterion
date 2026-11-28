@@ -215,7 +215,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
         candidates = tuple(t for t in TALENTS_BY_CLASS[character_class] if t.level == 25)
         assert tuple(t.talent_id for t in candidates) == TIER25[character_class]
         detail = render_talent_detail(view, candidates[0])
-        assert "Requer Nv.25" in detail.text
+        assert "Requer Nv. 25" in detail.text
         with pytest.raises(TalentMutationRejected) as under_level:
             await service.acquire(actor, candidates[0].talent_id, view.combat_configuration_version)
         assert under_level.value.code == TalentMutationCode.LEVEL_REQUIRED
@@ -319,7 +319,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
 
         future = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 55)
         future_detail = render_talent_detail(high_level, future)
-        assert "Nv.55" in future_detail.text
+        assert "Nv. 55" in future_detail.text
         assert "🌿 Adquirir" in [
             button.text
             for row in future_detail.keyboard.inline_keyboard

@@ -293,8 +293,8 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
         assert [choice.point_slot for choice in view.choices] == [1, 2, 3]
         assert {choice.talent_id for choice in view.choices} == set(TIER35[character_class])
         assert view.total_points == 7 and view.available_points == 4
-        listing = render_talent_list(view)
-        assert all(f"{definition.name} · Adquirido" in listing.text for definition in tier35)
+        listing = render_talent_list(view).text + render_talent_list(view, 1).text
+        assert all(f"<b>{definition.name}</b> · Adquirido" in listing for definition in tier35)
         with pytest.raises(TalentMutationRejected) as duplicate:
             await service.acquire(actor, tier35[0].talent_id, view.combat_configuration_version)
         assert duplicate.value.code == TalentMutationCode.DUPLICATE_TALENT

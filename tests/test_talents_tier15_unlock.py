@@ -222,6 +222,11 @@ def _combat_reconnect(state: Combat) -> Combat:
     return decode(encode(state), state.id, state.ruleset, state.version)
 
 
+def _full_listing(view) -> str:
+    """Texto das duas páginas da lista de Talentos (9 por página)."""
+    return render_talent_list(view).text + render_talent_list(view, 1).text
+
+
 @pytest.mark.asyncio
 async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_snapshots(database):
     assert IMPLEMENTED_TALENT_LEVELS == frozenset({5, 15, 25, 35, 45, 55})
@@ -241,7 +246,7 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         assert view is not None and view.total_points == 2
         tier15 = TALENTS_BY_CLASS[character_class][3:6]
         locked_detail = render_talent_detail(view, tier15[0])
-        assert "Requer Nv.15" in locked_detail.text
+        assert "Requer Nv. 15" in locked_detail.text
         assert "🌿 Adquirir" not in [
             button.text
             for row in locked_detail.keyboard.inline_keyboard
@@ -279,11 +284,11 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
             character_class, 15, [choice.talent_id for choice in view.choices]
         )
 
-        listing = render_talent_list(view)
+        listing = _full_listing(view)
         for talent in tier15:
-            assert f"{talent.name} · Adquirido" in listing.text
+            assert f"<b>{talent.name}</b> · Adquirido" in listing
         future = next(talent for talent in TALENTS_BY_CLASS[character_class] if talent.level == 35)
-        assert f"{future.name} · Requer Nv.35" in listing.text
+        assert f"<b>{future.name}</b> · Requer Nv. 35" in listing
         detail = render_talent_detail(view, future)
         assert "🌿 Adquirir" not in [
             button.text

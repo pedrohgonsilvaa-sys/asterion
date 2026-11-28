@@ -996,6 +996,12 @@ class CharacterDoctrine(Base):
             text("lower(name)"),
             unique=True,
         ),
+        Index(
+            "uq_character_doctrine_active",
+            "character_id",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
         CheckConstraint("char_length(name) BETWEEN 1 AND 40", name="ck_doctrine_name_length"),
         CheckConstraint("revision >= 0", name="ck_doctrine_revision"),
         CheckConstraint(
@@ -1013,6 +1019,10 @@ class CharacterDoctrine(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Doutrina ativa: registrada no banco; no máximo uma por personagem.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

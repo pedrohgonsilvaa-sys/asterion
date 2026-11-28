@@ -1,5 +1,6 @@
 from decimal import ROUND_FLOOR, Decimal
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from aiogram import Bot, Dispatcher
@@ -53,7 +54,7 @@ from asterion.infrastructure.db.models import (
     Unlock,
 )
 from tests.helpers.weapon_metadata import add_compatible_weapon_for_arts
-from tests.test_character_surfaces_telegram import _button, _last_screen, _message_update
+from tests.test_character_surfaces_telegram import _button, _last_screen
 from tests.test_creation_ui import callback_update
 from tests.test_road_integration import _seed_road
 
@@ -847,7 +848,7 @@ async def test_doctrine_rejects_two_hand_conflict_and_missing_item(database):
         await session.delete(await session.get(EquipmentItem, item_ids[0]))
     doctrine = (await service.view(actor)).doctrines[0]
     assert doctrine.incomplete_reason == "item_unavailable" and not doctrine.can_apply
-    assert "⚔️ <b>Principal</b> · <code>Indisponível</code>" in render_doctrine_detail(
+    assert "✋ <b>Principal</b> · Indisponível" in render_doctrine_detail(
         await service.view(actor), doctrine
     ).text
 
@@ -944,58 +945,57 @@ async def test_cosmetic_and_doctrine_telegram_flows_use_real_callbacks(database)
     )
     screen = _last_screen(bot)
     assert "🗂️ Doutrinas" in screen.text
-    requests_before = len(bot.session.make_request.call_args_list)
-    await dispatcher.feed_raw_update(
-        bot,
-        callback_update(_button(screen, "➕ Criar").callback_data, actor=actor, update_id=10),
+    # Nomes do sistema: não há criar, renomear nem excluir.
+    assert "<b>Doutrina I</b>" in screen.text and "➕ Criar" not in "".join(
+        button.text for row in screen.reply_markup.inline_keyboard for button in row
     )
-    # O pedido de nome é a própria tela, sem mensagem nova nem ForceReply (§7–§8).
     assert not sent_prompt_ids
-    assert not any(
-        isinstance(call.args[1], SendMessage)
-        for call in bot.session.make_request.call_args_list[requests_before:]
-    )
-    assert "✏️ Envie o novo nome da Doutrina." in _last_screen(bot).text
-    await dispatcher.feed_raw_update(
-        bot, _message_update("Guarda da Estrada", actor=actor, update_id=11)
-    )
-    screen = _last_screen(bot)
-    # Criada a partir da configuração atual: é a Doutrina em uso (🟢).
-    assert "🟢 <code>Guarda da Estrada</code>" in screen.text
-    assert "Ativa" not in screen.text and "Inativa" not in screen.text
 
     doctrine_service = DoctrineService(sessions, "ocaso")
     doctrine_view = await doctrine_service.view(actor)
     saved = doctrine_view.doctrines[0]
+    assert saved.name == "Doutrina I"
     art_id = ART_IDS_BY_CLASS["sentinela"][0]
+    revision = saved.revision
+    # A Arte pede arma compatível: a Doutrina recebe os equipamentos já usados.
+    for slot, item_id in doctrine_view.current_configuration["equipment"].items():
+        await doctrine_service.update_component(
+            actor,
+            saved.doctrine_id,
+            revision,
+            doctrine_view.configuration_version,
+            "equipment",
+            (slot, UUID(str(item_id))),
+        )
+        revision += 1
     await doctrine_service.update_component(
         actor,
         saved.doctrine_id,
-        saved.revision,
+        revision,
         doctrine_view.configuration_version,
         "arts",
         ("1", art_id),
     )
     edited_view = await doctrine_service.view(actor)
     edited = edited_view.doctrines[0]
-    assert not edited.is_current
+    assert not edited.is_active
     open_callback = f"doc:d:{edited.doctrine_id.hex}:{b36(edited.revision)}"
     await dispatcher.feed_raw_update(
         bot, callback_update(open_callback, actor=actor, update_id=12)
     )
     configuration = _last_screen(bot)
-    assert "⚙️ Configuração" in configuration.text
-    assert "1️⃣ <code>Golpe de Guarda</code>" in configuration.text
+    assert "🗂️ Doutrina I" in configuration.text
+    assert "Golpe de Guarda" in configuration.text
     assert "Caminho" not in configuration.text and "Slot" not in configuration.text
     await dispatcher.feed_raw_update(
         bot,
         callback_update(
-            _button(configuration, "✅ Usar").callback_data, actor=actor, update_id=13
+            _button(configuration, "✅ Ativar").callback_data, actor=actor, update_id=13
         ),
     )
     applied_screen = _last_screen(bot)
-    # Sem custo: usa direto, sem tela de confirmação, e volta às Doutrinas com 🟢.
-    assert "🟢 <code>Guarda da Estrada</code>" in applied_screen.text
+    # Grátis e imediato: sem confirmação; a Doutrina fica Ativada.
+    assert "✅ <b>Status</b> · <code>Ativada</code>" in applied_screen.text
     assert "Confirmar" not in applied_screen.text
     async with sessions() as session:
         character = await session.scalar(select(Character).where(Character.telegram_id == actor))
