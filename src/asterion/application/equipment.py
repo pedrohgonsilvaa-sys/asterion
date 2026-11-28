@@ -245,58 +245,64 @@ class EquipmentService:
             if character is None:
                 return None
             self._check_version(character, expected_configuration_version)
-            rows, current, equipped_items = await self._load_equipped(session, character.id)
-            item_id = current.get(target)
-            if item_id is None:
-                main_id = current.get(EquipmentSlot.PRINCIPAL)
-                main = equipped_items.get(main_id)
-                main_assignment = (
-                    assignment_for_item_slot(main.slot) if main is not None else None
-                )
-                status = (
-                    EquipmentMutationStatus.BLOCKED_BY_TWO_HANDED
-                    if target == EquipmentSlot.SECUNDARIA
-                    and main_assignment is not None
-                    and main_assignment.two_handed
-                    else EquipmentMutationStatus.ALREADY_EMPTY
-                )
-                return EquipmentMutationResult(
-                    status,
-                    target,
-                    None,
-                    character.combat_configuration_version,
-                )
+            return await self.unequip_in_session(session, character, target)
 
-            final = dict(current)
-            del final[target]
-            try:
-                current_configuration = await load_equipment_configuration(
-                    session, character
-                )
-                reconcile_character_hp(character, current_configuration)
-                configuration = build_equipment_configuration(
-                    character,
-                    [(slot, equipped_items[item_id]) for slot, item_id in final.items()],
-                    version=character.combat_configuration_version + 1,
-                    talent_choices=current_configuration.talent_choices,
-                )
-                new_stats = resolve_character_combat_stats(character, configuration)
-                new_hp = hp_after_equipment_change(character, new_stats.hp)
-            except ValueError as exc:
-                raise EquipmentMutationRejected(
-                    EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION
-                ) from exc
-            await self._write_equipped(session, character.id, rows, current, final)
-            character.combat_configuration_version += 1
-            character.max_hp = new_stats.hp
-            character.hp = new_hp
-            await session.flush()
+    async def unequip_in_session(
+        self, session: AsyncSession, character: Character, target: EquipmentSlot
+    ) -> EquipmentMutationResult:
+        """Unequip inside an open transaction; the caller holds the character lock."""
+        rows, current, equipped_items = await self._load_equipped(session, character.id)
+        item_id = current.get(target)
+        if item_id is None:
+            main_id = current.get(EquipmentSlot.PRINCIPAL)
+            main = equipped_items.get(main_id)
+            main_assignment = (
+                assignment_for_item_slot(main.slot) if main is not None else None
+            )
+            status = (
+                EquipmentMutationStatus.BLOCKED_BY_TWO_HANDED
+                if target == EquipmentSlot.SECUNDARIA
+                and main_assignment is not None
+                and main_assignment.two_handed
+                else EquipmentMutationStatus.ALREADY_EMPTY
+            )
             return EquipmentMutationResult(
-                EquipmentMutationStatus.CHANGED,
+                status,
                 target,
                 None,
                 character.combat_configuration_version,
             )
+
+        final = dict(current)
+        del final[target]
+        try:
+            current_configuration = await load_equipment_configuration(
+                session, character
+            )
+            reconcile_character_hp(character, current_configuration)
+            configuration = build_equipment_configuration(
+                character,
+                [(slot, equipped_items[item_id]) for slot, item_id in final.items()],
+                version=character.combat_configuration_version + 1,
+                talent_choices=current_configuration.talent_choices,
+            )
+            new_stats = resolve_character_combat_stats(character, configuration)
+            new_hp = hp_after_equipment_change(character, new_stats.hp)
+        except ValueError as exc:
+            raise EquipmentMutationRejected(
+                EquipmentMutationCode.INVALID_CURRENT_CONFIGURATION
+            ) from exc
+        await self._write_equipped(session, character.id, rows, current, final)
+        character.combat_configuration_version += 1
+        character.max_hp = new_stats.hp
+        character.hp = new_hp
+        await session.flush()
+        return EquipmentMutationResult(
+            EquipmentMutationStatus.CHANGED,
+            target,
+            None,
+            character.combat_configuration_version,
+        )
 
     async def _lock_character(self, session: AsyncSession, actor: int) -> Character | None:
         character_id = await session.scalar(

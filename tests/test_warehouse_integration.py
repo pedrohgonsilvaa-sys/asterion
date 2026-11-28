@@ -1606,7 +1606,7 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
     assert "📦 <b>Quantidade</b> · <code>5</code>" in material.text
     assert "🧱 <b>Tipo</b> · <code>Material</code>" in material.text
     labels = [b.text for row in material.reply_markup.inline_keyboard for b in row]
-    assert labels == ["📦 Guardar", "↩️ Retornar"]
+    assert labels == ["📦 Guardar", "🗑️ Descartar", "↩️ Retornar"]
     assert material.reply_markup.inline_keyboard[-1][0].callback_data == (
         "inventory:category:materials"
     )
