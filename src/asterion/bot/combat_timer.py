@@ -109,12 +109,16 @@ class CombatTicker:
         ticket: int,
         screen: Screen,
         edit: Callable[[], Awaitable[object]],
+        *,
+        force: bool = False,
     ):
-        """Run ``edit`` for ``screen`` unless it is redundant or stale.
+        """Run ``edit`` for ``screen`` unless it is stale (or, without ``force``, redundant).
 
         Writes to one message are serialized by its lock. A write is skipped when a
-        render with a later ticket already reached the message (its read is newer) or
-        when the message already shows exactly this content.
+        render with a later ticket already reached the message (its read is newer) or,
+        unless ``force``, when the message already shows exactly this content. Action
+        and callback renders use ``force``: a stale tap still redraws the current HUD.
+        The countdown never forces, so its restart does not repeat the action's render.
         """
         key = (chat_id, message_id)
         lock = self._locks.setdefault(key, asyncio.Lock())
@@ -122,7 +126,7 @@ class CombatTicker:
             current = fingerprint(screen)
             if ticket < self._ticket.get(key, -1):
                 return SKIPPED
-            if self._written.get(key) == current:
+            if not force and self._written.get(key) == current:
                 self._ticket[key] = ticket
                 return SKIPPED
             result = await edit()

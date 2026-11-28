@@ -162,14 +162,30 @@ async def test_countdown_keeps_one_edit_per_second_when_an_action_lands_mid_turn
     assert len(bot.captions) <= 8
 
 
-async def test_present_skips_identical_redraw_of_a_timed_combat_message(ids):
-    """The real ``present`` path: an identical re-render is not sent to Telegram again."""
+async def test_present_redraws_on_every_tap_like_before(ids):
+    """Callbacks keep their contract: a tap (even a stale one) redraws the current HUD."""
     message = _FakeMessage(ids)
     screen = _screen(turn_line(1, 10), timer="prologue:" + uuid4().hex)
 
     await present(message, screen, {}, edit=True)
     await present(message, screen, {}, edit=True)
 
+    assert message.edits == [turn_line(1, 10), turn_line(1, 10)]
+
+
+async def test_countdown_restart_after_present_does_not_repeat_the_hud(ids):
+    """Action present, then the countdown restarts: its first tick must not resend the HUD."""
+    message = _FakeMessage(ids)
+    screen = _screen(turn_line(1, 10), timer=f"prologue:{uuid4().hex}")
+    await present(message, screen, {}, edit=True)
+
+    # The restarted countdown's first write is not forced (it only redraws on change).
+    result = await ticker.write(
+        ids.chat, ids.message, ticker.begin(), screen,
+        lambda: _caption_text(message, "repeated"),
+    )
+
+    assert result is SKIPPED
     assert message.edits == [turn_line(1, 10)]
 
 

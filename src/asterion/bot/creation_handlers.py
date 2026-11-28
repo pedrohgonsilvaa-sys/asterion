@@ -259,6 +259,7 @@ async def present(
             ticker.begin(),
             screen,
             lambda: _present(message, screen, images, edit=edit),
+            force=True,
         )
         if message_id is SKIPPED:
             message_id = current_id
