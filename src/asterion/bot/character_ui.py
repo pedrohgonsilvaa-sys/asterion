@@ -42,8 +42,6 @@ CHARACTER_BUTTONS = (
     ("🎨 Cosméticos", "character:cosmetics"),
     ("🏆 Feitos", "kb:a"),
 )
-# Espaço ideográfico: separa as duas colunas sem quebrar na largura do celular.
-COLUMN_GAP = "\u3000"
 LEGACY_BUTTON = ("🏛️ Legado", "legacy:root")
 
 
@@ -104,13 +102,14 @@ def render_character(
                     stats.hp, stats.max_hp, stats.vigor, stats.max_vigor,
                     stats.xp, stats.xp_required, life_label="Vida",
                 ),
-                f"⚔️ <b>ATQ</b> · {mono(_value(stats.attack))}{COLUMN_GAP}"
+                # Especificação visual 2026-11-28: atributos um abaixo do outro.
+                f"⚔️ <b>ATQ</b> · {mono(_value(stats.attack))}\n"
                 f"💨 <b>AGI</b> · {mono(_value(stats.agility))}\n"
-                f"🛡️ <b>DEF</b> · {mono(_value(stats.defense))}{COLUMN_GAP}"
+                f"🛡️ <b>DEF</b> · {mono(_value(stats.defense))}\n"
                 f"❤️ <b>HP</b> · {mono(_value(stats.max_hp))}",
-                f"💥 <b>Crítico</b> · {mono(_percent(stats.critical))}{COLUMN_GAP}"
+                f"💥 <b>Crítico</b> · {mono(_percent(stats.critical))}\n"
                 f"⚡️ <b>Esquiva</b> · {mono(_percent(stats.evasion))}\n"
-                f"💢 <b>Bloqueio</b> · {mono(_percent(stats.block))}{COLUMN_GAP}"
+                f"💢 <b>Bloqueio</b> · {mono(_percent(stats.block))}\n"
                 f"🎯 <b>Precisão</b> · {mono(_percent(stats.perception))}",
             )
         )  # fmt: skip

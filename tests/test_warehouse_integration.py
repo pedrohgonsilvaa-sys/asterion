@@ -1516,17 +1516,97 @@ async def test_telegram_quantity_buttons_move_the_chosen_amount(database):
     choice = await click(button(choice, "+1"))
     assert "Quantidade · 21" in choice.text
     preview = await click(button(choice, "Continuar"))
-    assert "Quantidade · 21" in preview.text
-    await click(button(preview, "Confirmar"))
+    assert "📦 <b>Quantidade</b> · <code>21</code>" in preview.text
+    await click(button(preview, "✅ Confirmar"))
     assert await _total(sessions, WarehouseMaterialStack, character_id) == [21]
 
     single = await click(f"warehouse:deposit:material:{single_id.hex}")
-    assert "Confirmar transferência" in single.text
+    assert "Confirmar Armazenamento" in single.text
     assert "Escolher quantidade" not in single.text
 
     rejected = await click("warehouse:go:d:m:nao-e-uuid:1")
     assert rejected is not None
     assert await _total(sessions, WarehouseMaterialStack, character_id) == [21]
+
+
+@pytest.mark.asyncio
+async def test_store_from_item_detail_cancels_back_to_detail_and_confirms(database):
+    """Especificação visual 2026-11-28: 📥 Guardar pelo detalhe do item."""
+    actor, _ = await _seed_road(database, 781055)
+    sessions = database[1]
+    character_id = await _character_id(sessions, actor)
+    single_id, stack_id = uuid4(), uuid4()
+    async with sessions.begin() as session:
+        session.add_all(
+            [
+                _material(MaterialStack, character_id, quantity=1, row_id=single_id, bound=True),
+                _material(
+                    MaterialStack, character_id, quantity=3, row_id=stack_id,
+                    material_id="material.test.pilha",
+                ),
+            ]
+        )  # fmt: skip
+
+    bot = Bot("123456:local-test-token")
+    bot.session.make_request = AsyncMock(return_value=True)
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.include_router(
+        world_router(
+            WorldService(sessions, "ocaso"),
+            {},
+            inventory=InventoryService(sessions, "ocaso"),
+            warehouse=WarehouseService(sessions, "ocaso"),
+        )
+    )
+    update_id = 40
+
+    async def click(data):
+        nonlocal update_id
+        update_id += 1
+        await dispatcher.feed_raw_update(
+            bot, callback_update(data, update_id=update_id, actor=actor)
+        )
+        return bot.session.make_request.call_args.args[1]
+
+    def button(sent, text):
+        return next(
+            item.callback_data
+            for row in sent.reply_markup.inline_keyboard
+            for item in row
+            if item.text == text
+        )
+
+    detail = await click(f"inventory:material:{single_id.hex}")
+    preview = await click(button(detail, "📥 Guardar"))
+    assert "Confirmar Armazenamento" in preview.text
+    assert "🎒 <b>Item</b> · <code>Couro Escoriado</code>" in preview.text
+    # Cancelar e Retornar cancelam a prévia e voltam ao detalhe do item.
+    back = await click(button(preview, "❌ Cancelar"))
+    assert "🐾 <b>Couro Escoriado</b>" in back.text and "📥 Guardar" in str(back.reply_markup)
+    preview = await click(button(back, "📥 Guardar"))
+    back = await click(button(preview, "↩️ Retornar"))
+    assert "🐾 <b>Couro Escoriado</b>" in back.text
+    assert await _total(sessions, WarehouseMaterialStack, character_id) == []
+    assert sorted(await _total(sessions, MaterialStack, character_id)) == [1, 3]
+
+    preview = await click(button(back, "📥 Guardar"))
+    await click(button(preview, "✅ Confirmar"))
+    assert await _total(sessions, WarehouseMaterialStack, character_id) == [1]
+    assert await _total(sessions, MaterialStack, character_id) == [3]
+    async with sessions() as session:
+        stored = (await session.scalars(select(WarehouseMaterialStack))).all()
+    assert [row.bound for row in stored if row.character_id == character_id] == [True]
+
+    # Pilha: escolher 2 de 3 pelo detalhe mantém a origem até a confirmação.
+    detail = await click(f"inventory:material:{stack_id.hex}")
+    choice = await click(button(detail, "📥 Guardar"))
+    assert "Quantidade · 3" in choice.text
+    choice = await click(button(choice, "−1"))
+    preview = await click(button(choice, "Continuar"))
+    assert "📦 <b>Quantidade</b> · <code>2</code>" in preview.text
+    back = await click(button(preview, "❌ Cancelar"))
+    assert "📦 <b>Quantidade</b> · <code>3</code>" in back.text
+    assert await _total(sessions, MaterialStack, character_id) == [3]
 
 
 @pytest.mark.asyncio
@@ -1606,7 +1686,7 @@ async def test_inventory_page_button_opens_the_next_page_in_telegram(database):
     assert "📦 <b>Quantidade</b> · <code>5</code>" in material.text
     assert "🧱 <b>Tipo</b> · <code>Material</code>" in material.text
     labels = [b.text for row in material.reply_markup.inline_keyboard for b in row]
-    assert labels == ["📦 Guardar", "🗑️ Descartar", "↩️ Retornar"]
+    assert labels == ["📥 Guardar", "🗑️ Descartar", "↩️ Retornar"]
     assert material.reply_markup.inline_keyboard[-1][0].callback_data == (
         "inventory:category:materials"
     )

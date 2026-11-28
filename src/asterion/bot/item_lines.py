@@ -195,7 +195,7 @@ def list_item(position: int, entry: Any, item_id: str, *, blocked: bool = False)
     if kind == "equipment":
         payload = entry.payload or {}
         name = escape(equipment_name(entry.title, int(payload.get("enhancement", 0) or 0)))
-        lines = [f"#{position} {warning}{rarity_emoji(entry.rarity)} <b>{name}</b>"]
+        lines = [f"#{position} {warning}{rarity_emoji(entry.rarity)} <b>{name}</b>{quantity}"]
         attributes = stat_line(
             contribution_from_payload(
                 item_id=item_id, slot=entry.slot, item_level=entry.item_level,

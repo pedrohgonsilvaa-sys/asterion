@@ -67,7 +67,7 @@ def render_legacy_marks(view: LegacyMarksView, notice: str | None = None) -> Scr
             [_button(f"{prefix}{mark.name} · {mark.descriptor}{suffix}", f"lmk:d:{mark.id}")]
         )
     rows.append([_button("← Legado", "legacy:root")])
-    return Screen("\n".join(lines), "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+    return Screen("\n".join(lines), "character", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def render_legacy_mark_detail(
@@ -102,7 +102,7 @@ def render_legacy_mark_detail(
     if notice:
         lines = [notice, "", *lines]
     rows.append([_button("← Marcas de Legado", "lmk:root")])
-    return Screen("\n".join(lines), "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+    return Screen("\n".join(lines), "character", InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def render_legacy_mark_removal(view: LegacyMarksView, mark_id: str) -> Screen:
@@ -123,4 +123,4 @@ def render_legacy_mark_removal(view: LegacyMarksView, mark_id: str) -> Screen:
         [_button("Confirmar Remoção", f"lmk:offok:{mark.id}")],
         [_button("Cancelar", f"lmk:d:{mark.id}")],
     ]
-    return Screen("\n".join(lines), "menu", InlineKeyboardMarkup(inline_keyboard=rows))
+    return Screen("\n".join(lines), "character", InlineKeyboardMarkup(inline_keyboard=rows))
