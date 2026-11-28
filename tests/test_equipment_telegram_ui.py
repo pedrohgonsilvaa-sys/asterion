@@ -205,7 +205,7 @@ def test_character_hub_follows_approved_layout():
     assert "🏛️ Legado" in [b.text for b in _buttons(render_character(_identity(level=60)))]
 
 
-def test_character_stats_keep_vida_and_hp_and_precisao_in_two_columns():
+def test_character_stats_keep_vida_and_hp_and_precisao_one_per_line():
     from asterion.application.character_surfaces import AttributesView
 
     stats = AttributesView(
@@ -219,10 +219,14 @@ def test_character_stats_keep_vida_and_hp_and_precisao_in_two_columns():
     assert "🪙 <b>Coroas</b> · <code>21</code>" in text
     assert "❤️ <b>Vida</b> · <code>618/618</code>\n🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥" in text
     assert "✨ <b>XP</b> · <code>320/4.800</code>\n🟦⬜⬜⬜⬜⬜⬜⬜⬜⬜" in text
-    assert "⚔️ <b>ATQ</b> · <code>112</code>\u3000💨 <b>AGI</b> · <code>83</code>" in text
-    assert "🛡️ <b>DEF</b> · <code>71</code>\u3000❤️ <b>HP</b> · <code>618</code>" in text
-    assert "💥 <b>Crítico</b> · <code>5%</code>\u3000⚡️ <b>Esquiva</b> · <code>0%</code>" in text
-    assert "💢 <b>Bloqueio</b> · <code>0%</code>\u3000🎯 <b>Precisão</b> · <code>0%</code>" in text
+    # Especificação visual 2026-11-28: atributos um abaixo do outro, sem duas colunas.
+    assert (
+        "⚔️ <b>ATQ</b> · <code>112</code>\n💨 <b>AGI</b> · <code>83</code>\n"
+        "🛡️ <b>DEF</b> · <code>71</code>\n❤️ <b>HP</b> · <code>618</code>\n\n"
+        "💥 <b>Crítico</b> · <code>5%</code>\n⚡️ <b>Esquiva</b> · <code>0%</code>\n"
+        "💢 <b>Bloqueio</b> · <code>0%</code>\n🎯 <b>Precisão</b> · <code>0%</code>"
+    ) in text
+    assert "　" not in text
     assert "PER" not in text and "Perfuração" not in text
 
 
@@ -258,7 +262,7 @@ def _full_root():
     return _root(items)
 
 
-def test_equipment_root_page_one_follows_the_approved_layout():
+def test_equipment_root_shows_all_eight_slots_on_one_page():
     root = _full_root()
     from dataclasses import replace
 
@@ -273,31 +277,28 @@ def test_equipment_root_page_one_follows_the_approved_layout():
     assert "🤚 <b>Secundária</b> · 🔵 Espada Curta +1\n⚔️ <code>+9 ATQ</code> · 💨 <code>+2 AGI</code>" in screen.text  # noqa: E501
     assert "🪖 <b>Cabeça</b> · ⚪️ Elmo de Cinza\n❤️ <code>+8 HP</code> · 🛡️ <code>+3 DEF</code>" in screen.text  # noqa: E501
     assert "🥋 <b>Torso</b> · 🔵 Gibão do Caminhante +3" in screen.text
-    assert "+0" not in screen.text and "Luvas" not in screen.text
+    assert "🧤 <b>Mãos</b> · ⚪️ Luvas de Cinza\n💨 <code>+3 AGI</code> · 💥 <code>+1% Crítico</code>" in screen.text  # noqa: E501
+    assert "🥾 <b>Pés</b> · Vazio" in screen.text
+    assert "💍 <b>Acessório</b> · Vazio" in screen.text
+    assert "🔮 <b>Artefato</b> · ⚪️ Orbe do Ocaso\n🎯 <code>+2% Precisão</code>" in screen.text
+    assert "+0" not in screen.text
+    assert screen.image_key == "character"
     assert _texts(screen) == [
         ["✋ Principal", "🤚 Secundária"],
         ["🪖 Cabeça", "🥋 Torso"],
-        ["▶️ Próxima"],
+        ["🧤 Mãos", "🥾 Pés"],
+        ["💍 Acessório", "🔮 Artefato"],
         ["↩️ Retornar"],
     ]
     assert [b.callback_data for b in _buttons(screen)] == [
-        "eq:s:p:4", "eq:s:s:4", "eq:s:h:4", "eq:s:t:4", "eq:r:1", "character:root",
+        "eq:s:p:4", "eq:s:s:4", "eq:s:h:4", "eq:s:t:4",
+        "eq:s:m:4", "eq:s:f:4", "eq:s:a:4", "eq:s:r:4", "character:root",
     ]  # fmt: skip
 
 
-def test_equipment_root_page_two_and_empty_slots():
-    screen = render_equipment_root(_full_root(), 1)
-    assert "🧤 <b>Mãos</b> · ⚪️ Luvas de Cinza\n💨 <code>+3 AGI</code> · 💥 <code>+1% Crítico</code>" in screen.text  # noqa: E501
-    assert "🥾 <b>Pés</b> · Vazio" in screen.text
-    assert "🔮 <b>Artefato</b> · ⚪️ Orbe do Ocaso\n🎯 <code>+2% Precisão</code>" in screen.text
-    assert _texts(screen) == [
-        ["🧤 Mãos", "🥾 Pés"],
-        ["💍 Acessório", "🔮 Artefato"],
-        ["◀️ Anterior"],
-        ["↩️ Retornar"],
-    ]
-    assert [b.callback_data for b in _buttons(screen)][-2] == "eq:r"
-    assert render_equipment_root(_full_root(), 99).text == screen.text
+def test_equipment_root_old_page_callback_shows_the_same_single_page():
+    assert render_equipment_root(_full_root(), 1).text == render_equipment_root(_full_root()).text
+    assert render_equipment_root(_full_root(), 99).text == render_equipment_root(_full_root()).text
 
 
 def test_equipment_root_blocks_secondary_for_two_handed_weapon():
@@ -332,10 +333,12 @@ def test_equipment_detail_follows_approved_layout():
     screen = render_equipment_detail(EquipmentDetailView(uuid4(), 20, 7, item), context="s")
     assert screen.text.startswith("<b>🗡️ Adaga</b>\n\n<i>Uma lâmina curta e leve.</i>\n\n")
     assert (
-        "🗡️ <b>ATQ</b> · <code>+6</code>\n✨ <b>Grau</b> · <code>I</code>\n"
-        "⚪ <b>Raridade</b> · <code>Comum</code>\n✋ <b>Empunhadura</b> · <code>1 Mão</code>\n"
+        "🗡️ <b>ATQ</b> · <code>+6</code>\n\n✨ <b>Grau</b> · <code>I</code>\n"
+        "⚪ <b>Raridade</b> · <code>Comum</code>\n📦 <b>Quantidade</b> · <code>1</code>\n\n"
+        "✋ <b>Empunhadura</b> · <code>1 Mão</code>\n"
         "🎓 <b>Proficiência</b> · <code>Lâminas</code>\n🔗 <b>Vínculo</b> · <code>Vinculado</code>"
     ) in screen.text
+    assert screen.image_key == "character"
     assert "🔷 <b>Runa</b> · <code>Runa da Fresta</code>\n🎯 <code>+2% Precisão</code>" in screen.text  # noqa: E501
     assert "💫 <b>Encantamento</b> · <code>Marca do Véu</code>\n🎯 <code>+1% Precisão</code>" in screen.text  # noqa: E501
     assert "🌟 <b>Golpe da Ruptura</b> · <code>Passiva</code>\n\n<i>Dano adicional.</i>" in screen.text  # noqa: E501
@@ -478,7 +481,7 @@ def test_candidates_without_compatible_equipment_use_the_approved_empty_state():
         "esta posição. Obtenha um equipamento compatível para poder equipá-lo.</i>"
     )
     assert [b.callback_data for b in _buttons(screen)] == ["eq:r"]
-    assert screen.image_key == "equipment"
+    assert screen.image_key == "character"
 
 
 def test_inventory_equipment_rows_open_detail_and_hide_zero_enhancement():

@@ -34,6 +34,11 @@ def narrative(text: str) -> str:
     return f"<i>{escape(text)}</i>"
 
 
+# Chave de imagem que o envio troca pela skin atual do personagem (raça, gênero e
+# classe). Toda tela interna do menu Personagem usa esta chave (spec 2026-11-28).
+CHARACTER_SKIN = "character"
+
+
 def mono(text: str) -> str:
     return f"<code>{escape(text)}</code>"
 

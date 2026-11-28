@@ -503,4 +503,4 @@ def render_legacy(
             [InlineKeyboardButton(text="← Personagem", callback_data="character:root")]
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-    return with_flavor(Screen(text, "menu", keyboard), "legado")
+    return with_flavor(Screen(text, "character", keyboard), "legado")

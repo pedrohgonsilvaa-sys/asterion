@@ -56,7 +56,7 @@ def _legacy_view() -> LegacyView:
 
 def _inventory_view() -> InventoryView:
     return InventoryView(
-        "inventory_root",
+        "inventory_category",
         uuid4(),
         used_slots=1,
         equipment_slots=1,

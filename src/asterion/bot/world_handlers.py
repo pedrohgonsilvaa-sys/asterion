@@ -1670,11 +1670,27 @@ def world_router(
     # Origem do Armazém por usuário: aberto pelo Refúgio, Voltar retorna ao Refúgio;
     # abrir o Inventário devolve o Armazém ao retorno padrão (Inventário).
     warehouse_from_refuge: set[int] = set()
+    # Guardar aberto pelo detalhe do item: usuário → id do Material (hex). Cancelar e
+    # Retornar da confirmação voltam a esse detalhe (decisão do autor 2026-11-28).
+    warehouse_item_origin: dict[int, str] = {}
 
     def warehouse_screen(actor: int, view, page: int = 0):
         from asterion.bot.warehouse_ui import render_warehouse
 
-        return render_warehouse(view, page, back_to_refuge=actor in warehouse_from_refuge)
+        return render_warehouse(
+            view,
+            page,
+            back_to_refuge=actor in warehouse_from_refuge,
+            from_item=actor in warehouse_item_origin,
+        )
+
+    def track_item_origin(actor: int, data: str, source: str) -> None:
+        from asterion.bot.inventory_ui import FROM_ITEM_DETAIL
+
+        if data.endswith(f":{FROM_ITEM_DETAIL}"):
+            warehouse_item_origin[actor] = source
+        else:
+            warehouse_item_origin.pop(actor, None)
 
     @router.callback_query(F.data == "inventory:root")
     async def inventory_root(query: CallbackQuery):
@@ -1810,7 +1826,10 @@ def world_router(
             return
         from asterion.bot.warehouse_ui import render_warehouse_store_menu
 
-        await present(query.message, render_warehouse_store_menu(), images, edit=True)
+        screen = render_warehouse_store_menu(
+            back_to_refuge=query.from_user.id in warehouse_from_refuge
+        )
+        await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:inventory:"))
     async def warehouse_inventory_list(query: CallbackQuery):
@@ -1835,11 +1854,17 @@ def world_router(
         if warehouse is None or not isinstance(query.message, Message):
             await query.answer()
             return
+        from asterion.bot.inventory_ui import FROM_ITEM_DETAIL
+
         parts = (query.data or "").split(":")
+        if len(parts) == 5 and parts[1] == "deposit" and parts[4] == FROM_ITEM_DETAIL:
+            parts = parts[:4]
         if len(parts) != 4:
             await query.answer("Transferência inválida.", show_alert=True)
             return
         direction, kind, item_token = parts[1], parts[2], parts[3]
+        actor = query.from_user.id
+        track_item_origin(actor, query.data or "", item_token)
         try:
             item_id = UUID(hex=item_token)
             choice = None
@@ -1851,7 +1876,12 @@ def world_router(
                 from asterion.bot.warehouse_ui import render_warehouse_quantity
 
                 await query.answer()
-                screen = render_warehouse_quantity(choice, choice.quantity)
+                screen = render_warehouse_quantity(
+                    choice,
+                    choice.quantity,
+                    back_to_refuge=actor in warehouse_from_refuge,
+                    from_item=actor in warehouse_item_origin,
+                )
                 await present(query.message, screen, images, edit=True)
                 return
             view = await warehouse.prepare_transfer(query.from_user.id, direction, kind, item_id)
@@ -1881,9 +1911,16 @@ def world_router(
             )
             await query.answer(message, show_alert=True)
             return
+        actor = query.from_user.id
+        track_item_origin(actor, query.data or "", item_id.hex)
         await query.answer()
         if view is not None:
-            screen = render_warehouse_quantity(view, selected)
+            screen = render_warehouse_quantity(
+                view,
+                selected,
+                back_to_refuge=actor in warehouse_from_refuge,
+                from_item=actor in warehouse_item_origin,
+            )
             await present(query.message, screen, images, edit=True)
 
     @router.callback_query(F.data.startswith("warehouse:go:"))
@@ -1906,6 +1943,7 @@ def world_router(
             )
             await query.answer(message, show_alert=True)
             return
+        track_item_origin(query.from_user.id, query.data or "", item_id.hex)
         await query.answer("Revise e confirme a transferência.")
         if view is not None:
             await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)
@@ -1930,6 +1968,7 @@ def world_router(
             "SAFE_LOCATION_REQUIRED": "O Armazém só está disponível em Braseiro permanente descoberto.",
         }
         await query.answer(messages.get(result.status, "Transferência não concluída."), show_alert=result.status != "COMMITTED")
+        warehouse_item_origin.pop(query.from_user.id, None)
         if result.direction == "claim_pending" and inventory is not None:
             view = await inventory.pending(query.from_user.id)
             if view is not None:
@@ -1950,6 +1989,24 @@ def world_router(
         except ValueError:
             status = "NOT_FOUND"
         await query.answer("Prévia cancelada." if status == "CANCELLED" else "Prévia não está mais ativa.", show_alert=status != "CANCELLED")
+        source = warehouse_item_origin.pop(query.from_user.id, None)
+        if source is not None and inventory is not None:
+            # Guardar aberto pelo detalhe do item: volta ao mesmo detalhe.
+            materials = await inventory.category(query.from_user.id, "materials")
+            entry = next(
+                (
+                    item
+                    for item in (materials.entries if materials is not None else ())
+                    if material_source(item) == source
+                ),
+                None,
+            )
+            if entry is not None:
+                await present(query.message, render_material_detail(entry), images, edit=True)
+                return
+            if materials is not None:
+                await present(query.message, render_inventory(materials), images, edit=True)
+                return
         view = await warehouse.root(query.from_user.id)
         if view is not None:
             await present(query.message, warehouse_screen(query.from_user.id, view), images, edit=True)

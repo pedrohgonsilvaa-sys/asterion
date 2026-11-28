@@ -9,6 +9,8 @@ from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.flavor_ui import with_flavor
+from asterion.bot.ui_format import keycap, numeric_rows, page_nav
+from asterion.bot.world_ui import CLASS_EMOJI
 from asterion.domain.arts import (
     ACTIVE_ART_IDS_BY_CLASS,
     ORACULO_ART_IDS,
@@ -512,7 +514,6 @@ ARTS_TEXT = (
     "Artes são técnicas especiais que permitem canalizar habilidades únicas durante os "
     "confrontos de Asterion."
 )
-ARTS_PER_PAGE = 4
 # Descrições de Arte definidas pela Fonte; sem descrição, a linha não aparece.
 ART_DESCRIPTIONS = {
     "sentinela.golpe_de_guarda": (
@@ -560,47 +561,96 @@ def _field_html(line: str) -> str:
     return f"{emoji} <b>{escape(label)}</b> · <code>{escape(value)}</code>"
 
 
+def art_pages(character_class: str) -> tuple[tuple[str, str | None, tuple[str, ...]], ...]:
+    """Páginas da tela de Artes: Classe e, em seguida, cada Caminho da Classe.
+
+    Cada página é ``(título, path_id ou None, ids das Artes em ordem de desbloqueio)``.
+    """
+    all_arts = ACTIVE_ART_IDS_BY_CLASS[character_class]
+
+    def page_arts(path_id: str | None) -> tuple[str, ...]:
+        arts = [
+            art_id
+            for art_id in all_arts
+            if (definition := active_art_definition(art_id)) is not None
+            and definition.path_id == path_id
+        ]
+        return tuple(sorted(arts, key=lambda art_id: active_art_definition(art_id).min_level))
+
+    pages = [("Artes da Classe", None, page_arts(None))]
+    for path_id, path in PATH_DEFINITIONS.items():
+        if path.character_class == character_class:
+            pages.append(("Artes do Caminho", path_id, page_arts(path_id)))
+    return tuple(pages)
+
+
+def art_page_of(character_class: str, art_id: str) -> int:
+    for index, (_, _, arts) in enumerate(art_pages(character_class)):
+        if art_id in arts:
+            return index
+    return 0
+
+
+def _equipped_slot(view: ActiveArtCharacterView, art_id: str) -> int | None:
+    return next((entry.slot for entry in view.slots if entry.art_id == art_id), None)
+
+
 def render_art_root(view: ActiveArtCharacterView, page: int = 0) -> Screen:
+    """Artes em 3 páginas (Classe e os dois Caminhos), com os 3 espaços equipados.
+
+    Estados: Bloqueada (🔒), Desbloqueada (emoji da categoria) e Equipado (✅).
+    """
     actions = _actions_for_view(view)
     version = _base36(view.combat_configuration_version)
     equipped_lines = []
     for slot in (1, 2, 3):
         art_id = next((entry.art_id for entry in view.slots if entry.slot == slot), None)
-        name = actions[art_id].name if art_id in actions else "Vazio"
-        equipped_lines.append(f"{_KEYCAPS[slot - 1]} <code>{escape(name)}</code>")
-    known = list(_art_ids(view))
-    pages = max(1, -(-len(known) // ARTS_PER_PAGE))
-    page = min(max(page, 0), pages - 1)
-    shown = known[page * ARTS_PER_PAGE : (page + 1) * ARTS_PER_PAGE]
-    known_lines = [
-        f"{_art_emoji(actions[art_id])} <code>{escape(actions[art_id].name)}</code>"
-        for art_id in shown
-    ]
-    buttons = [
-        _button(
-            f"{_art_emoji(actions[art_id])} {actions[art_id].name.split()[0]}",
-            f"art:d:{_base36(_art_index(view, art_id))}:{version}",
+        if art_id in actions:
+            label = f"{_art_emoji(actions[art_id])} {actions[art_id].name}"
+        else:
+            label = "⛔️ Vazio"
+        equipped_lines.append(f"<code>{escape(label)}</code>")
+    pages = art_pages(view.character_class)
+    page = min(max(page, 0), len(pages) - 1)
+    title, path_id, arts = pages[page]
+    if path_id is None:
+        emoji = CLASS_EMOJI.get(view.character_class, "🧿")
+        owner = _class_label(view.character_class)
+    else:
+        emoji = PATH_DEFINITIONS[path_id].emoji
+        owner = PATH_DEFINITIONS[path_id].name
+    art_lines = []
+    buttons = []
+    for position, art_id in enumerate(arts, start=1):
+        action = actions[art_id]
+        definition = active_art_definition(art_id)
+        if _equipped_slot(view, art_id) is not None:
+            state = "✅"
+        elif art_id in view.available_art_ids:
+            state = _art_emoji(action)
+        else:
+            state = "🔒"
+        art_lines.append(
+            f"#{position} {state} <b>{escape(action.name)}</b> · "
+            f"<code>Nv. {definition.min_level}</code>"
         )
-        for art_id in shown
-    ]
-    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
-    navigation = []
-    if page > 0:
-        navigation.append(_button("◀️ Anterior", f"art:p:{page - 1}"))
-    if page < pages - 1:
-        navigation.append(_button("▶️ Próxima", f"art:p:{page + 1}"))
-    if navigation:
-        rows.append(navigation)
+        buttons.append(
+            _button(keycap(position), f"art:d:{_base36(_art_index(view, art_id))}:{version}")
+        )
+    rows = numeric_rows(buttons)
+    rows.append(page_nav(page, len(pages), lambda target: f"art:p:{target}"))
     rows.append([_button("↩️ Retornar", "character:root")])
     parts = [
         f"<b>{escape(ARTS_TITLE)}</b>",
         f"<i>{escape(ARTS_TEXT)}</i>",
-        "✨ <b>Artes Equipadas</b>\n\n" + "\n".join(equipped_lines),
-        "📚 <b>Artes Conhecidas</b>\n\n" + "\n".join(known_lines)
-        if known_lines
-        else "📚 <b>Artes Conhecidas</b>",
+        f"📄 <b>Página</b> · <code>{page + 1}/{len(pages)}</code>",
+        "📜 <b>Artes Equipadas</b>\n\n" + "\n".join(equipped_lines),
+        f"{emoji} <b>{escape(title)}</b> · <code>{escape(owner)}</code>\n\n"
+        + "\n".join(art_lines),
     ]
-    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
+    return Screen(
+        "\n\n".join(parts), "character", _keyboard([row for row in rows if row]), parse_mode="HTML"
+    )
 
 
 def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
@@ -630,18 +680,24 @@ def render_art_detail(view: ActiveArtCharacterView, art_id: str) -> Screen:
         about.append(_field_html(f"🔓 Desbloqueio · Nv. {definition.min_level}"))
     about.append(_field_html(f"🛡️ Arte Ativa · {origin}"))
     parts.append("\n".join(about))
-    rows = [
+    # Arte bloqueada abre só a leitura do detalhe (decisão do autor 2026-11-28).
+    rows = (
         [
-            _button(
-                f"{_KEYCAPS[slot - 1]} Equipar Arte [Slot {slot}]",
-                f"art:s:{_base36(art_index)}:{slot}:{version}",
-            )
+            [
+                _button(
+                    f"{_KEYCAPS[slot - 1]} Equipar Arte [Slot {slot}]",
+                    f"art:s:{_base36(art_index)}:{slot}:{version}",
+                )
+            ]
+            for slot in (1, 2, 3)
         ]
-        for slot in (1, 2, 3)
-    ]
+        if art_id in view.available_art_ids
+        else []
+    )
     if equipped_slot is not None:
         rows.append(
             [_button("❌ Desequipar", f"art:u:{_base36(equipped_slot)}:{version}")]
         )
-    rows.append([_button("↩️ Retornar", "art:r")])
+    page = art_page_of(view.character_class, art_id)
+    rows.append([_button("↩️ Retornar", f"art:p:{page}" if page else "art:r")])
     return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")

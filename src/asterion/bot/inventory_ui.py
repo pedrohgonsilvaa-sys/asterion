@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.inventory import InventoryEntry, InventoryView
 from asterion.bot.creation_ui import Screen
 from asterion.bot.item_lines import list_item
-from asterion.bot.ui_format import keycap, numeric_rows, page_nav
+from asterion.bot.ui_format import CHARACTER_SKIN, keycap, numeric_rows, page_nav
 from asterion.domain.consumables import grade_label
 
 # UI aprovada: até 6 itens por página, cada um com seu botão numérico.
@@ -195,6 +195,10 @@ PENDING_TEXT = (
     "Itens recebidos durante a jornada permanecem aqui quando não podem ser enviados "
     "diretamente para o inventário."
 )
+PENDING_EMPTY_TEXT = (
+    "Não há entregas aguardando recebimento. Quando um item não puder ser enviado "
+    "diretamente ao inventário, ele aparecerá aqui."
+)
 FILTER_LABELS = {
     "all": "Todos",
     "equipment": "Equipamentos",
@@ -216,7 +220,16 @@ MATERIAL_DESCRIPTIONS = {
     "material.tdo.residuo_ocaso": (
         "Um resíduo condensado das forças que atravessam as regiões de Asterion."
     ),
+    # Especificação visual 2026-11-28 (Detalhes — Couro Escoriado).
+    "material.tdo.couro_escoriado": (
+        "Um couro áspero e marcado por cortes, arrancado de criaturas que percorrem as "
+        "terras cobertas pela fuligem. Apesar da aparência ressecada, ainda conserva "
+        "resistência suficiente para ser aproveitado em trabalhos de couro."
+    ),
 }
+# Marca no callback de Guardar aberto pelo detalhe do item: Cancelar e Retornar da
+# confirmação voltam ao detalhe (decisão do autor 2026-11-28).
+FROM_ITEM_DETAIL = "i"
 
 
 def _field(emoji: str, label: str, value) -> str:
@@ -280,9 +293,11 @@ def render_material_detail(entry: InventoryEntry, page: int = 0) -> Screen:
     icon = MATERIAL_META.get(entry.key, ("🧱", ""))[0]
     description = MATERIAL_DESCRIPTIONS.get(entry.key)
     grade = material_grade(entry)
-    fields = [
+    amounts = [
         *([_field("✨", "Grau", grade)] if grade else []),
         _field("📦", "Quantidade", entry.quantity),
+    ]
+    kind = [
         _field("🧱", "Tipo", "Material"),
         *([_field("🔗", "Vínculo", "Vinculado")] if entry.bound else []),
     ]
@@ -291,20 +306,22 @@ def render_material_detail(entry: InventoryEntry, page: int = 0) -> Screen:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text="📦 Guardar", callback_data=f"warehouse:deposit:material:{source}"
-                )
+                    text="📥 Guardar",
+                    callback_data=f"warehouse:deposit:material:{source}:{FROM_ITEM_DETAIL}",
+                ),
+                discard_button("material", source),
             ]
         )
-        rows.append([discard_button("material", source)])
     back = "inventory:category:materials" + (f":{page}" if page else "")
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
     return Screen(
         _blocks(
             f"{icon} <b>{escape(entry.title)}</b>",
             f"<i>{escape(description)}</i>" if description else None,
-            "\n".join(fields),
+            "\n".join(amounts),
+            "\n".join(kind),
         ),
-        "inventory",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -344,7 +361,7 @@ def _render_listing(view: InventoryView, page: int) -> Screen:
         _blocks(
             f"<b>{INVENTORY_TITLE}</b>", f"<i>{escape(INVENTORY_TEXT)}</i>", header, listing
         ),
-        "inventory",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
@@ -357,7 +374,7 @@ def render_pending(view: InventoryView, page: int = 0) -> Screen:
     listing = (
         render_item_list(entries, ids=[entry.key for entry in entries], blocked=blocked)
         if entries
-        else "Nenhuma Entrega Pendente."
+        else f"<i>{escape(PENDING_EMPTY_TEXT)}</i>"
     )
     header = "\n".join(
         (_field("🗳️", "Espaço", f"{view.pending_count}/{view.pending_capacity}"), *page_line(page, pages))  # noqa: E501
@@ -378,7 +395,7 @@ def render_pending(view: InventoryView, page: int = 0) -> Screen:
         _blocks(
             f"<b>{PENDING_TITLE}</b>", f"<i>{escape(PENDING_TEXT)}</i>", header, waiting, listing
         ),
-        "pending",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
@@ -398,7 +415,7 @@ def render_rune_detail(entry: InventoryEntry) -> Screen:
     rows = [[InlineKeyboardButton(text="↩️ Retornar", callback_data="inventory:category:runes")]]
     return Screen(
         _blocks(f"🔷 <b>{escape(entry.title)}</b>", "\n".join(fields)),
-        "inventory",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -437,7 +454,7 @@ def _render_consumable_detail(view: InventoryView) -> Screen:
             )
         ]
     )
-    return Screen("\n".join(lines), "inventory", InlineKeyboardMarkup(inline_keyboard=rows))
+    return Screen("\n".join(lines), CHARACTER_SKIN, InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 def discard_button(kind: str, item_hex: str) -> InlineKeyboardButton:
@@ -479,7 +496,7 @@ def render_discard_confirm(view) -> Screen:
             "Ele não vai para o Armazém.</i>",
             "\n".join(fields),
         ),
-        "inventory",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )

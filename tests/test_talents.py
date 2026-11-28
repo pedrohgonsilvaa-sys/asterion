@@ -340,8 +340,9 @@ def test_devastador_ariete_is_visible_with_explicit_melee_requirement():
         foreground=False,
     )
 
-    root = render_art_root(view)
-    assert "Aríete" in root.text
+    # Especificação 2026-11-28: Artes do Devastador ficam na página 3 (índice 2).
+    root = render_art_root(view, 2)
+    assert "<b>Aríete</b>" in root.text and "🔒 <b>Aríete</b>" not in root.text
     detail = render_art_detail(view, ariete)
     assert "135% ATQ" in detail.text
     assert "+10 p.p." in detail.text

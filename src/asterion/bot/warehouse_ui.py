@@ -1,5 +1,6 @@
 """Telegram screens for public Warehouse transfers."""
 
+from dataclasses import replace
 from html import escape
 from uuid import UUID
 
@@ -8,9 +9,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.inventory import origin_label
 from asterion.application.warehouse import WarehouseView
 from asterion.bot.creation_ui import Screen
-from asterion.bot.inventory_ui import _field, numbered_buttons, page_line, page_slice
+from asterion.bot.inventory_ui import (
+    FROM_ITEM_DETAIL,
+    _field,
+    numbered_buttons,
+    page_line,
+    page_slice,
+)
 from asterion.bot.item_lines import list_item
-from asterion.bot.ui_format import numeric_rows, page_nav
+from asterion.bot.ui_format import CHARACTER_SKIN, numeric_rows, page_nav
 
 QUANTITY_STEPS = (100, 10, 1)
 # Short codes keep quantity callbacks inside Telegram's 64-byte limit.
@@ -22,6 +29,18 @@ WAREHOUSE_TEXT = (
     "Itens armazenados permanecem guardados separadamente do inventário e podem ser "
     "retirados quando necessário."
 )
+WAREHOUSE_EMPTY_TEXT = (
+    "O Armazém ainda não possui itens armazenados. Os itens depositados aqui ficarão "
+    "disponíveis para retirada quando necessário."
+)
+STORE_TITLE = "🗄️ Confirmar Armazenamento"
+STORE_TEXT = (
+    "O item será retirado do inventário e transferido para o Armazém, onde permanecerá "
+    "guardado separadamente até que você decida retirá-lo novamente."
+)
+# Armazém aberto pelo Mercado fica sem a skin; aberto pelo Personagem, com a skin
+# (decisão do autor 2026-11-28).
+MARKET_IMAGE = "warehouse"
 UNAVAILABLE_REASON = {"EQUIPPED": "Equipado"}
 SOURCE_TITLE = {
     "equipment": "Equipamentos disponíveis para guardar",
@@ -31,29 +50,47 @@ SOURCE_TITLE = {
 }
 
 
+def _image(back_to_refuge: bool) -> str:
+    return MARKET_IMAGE if back_to_refuge else CHARACTER_SKIN
+
+
 def render_warehouse(
-    view: WarehouseView, page: int = 0, *, back_to_refuge: bool = False
+    view: WarehouseView,
+    page: int = 0,
+    *,
+    back_to_refuge: bool = False,
+    from_item: bool = False,
 ) -> Screen:
-    """``back_to_refuge``: o Armazém foi aberto pelo Refúgio do Ocaso, e Voltar retorna a ele."""
+    """``back_to_refuge``: o Armazém foi aberto pelo Mercado, e Voltar retorna a ele.
+
+    ``from_item``: o depósito começou no 📥 Guardar do detalhe do item.
+    """
     if view.kind == "warehouse_operation":
-        return _render_operation(view)
-    if view.kind == "warehouse_inventory_sources":
-        return _render_sources(view, page)
-    return _render_root(view, page, back_to_refuge)
+        screen = _render_operation(view, from_item=from_item)
+    elif view.kind == "warehouse_inventory_sources":
+        screen = _render_sources(view, page)
+    else:
+        screen = _render_root(view, page, back_to_refuge)
+    return replace(screen, image_key=_image(back_to_refuge))
 
 
-def render_warehouse_quantity(view: WarehouseView, selected: int) -> Screen:
+def render_warehouse_quantity(
+    view: WarehouseView, selected: int, *, back_to_refuge: bool = False, from_item: bool = False
+) -> Screen:
     """Let the player pick an exact amount; the amount only lives in the buttons."""
 
     available = view.quantity
     selected = min(max(selected, 1), available)
+    origin = f":{FROM_ITEM_DETAIL}" if from_item else ""
     token = (
         f"{DIRECTION_CODE[view.direction or '']}:{KIND_CODE[view.item_kind or '']}:"
         f"{view.source_id.hex if view.source_id else ''}"
     )
 
     def goes_to(text: str, amount: int) -> InlineKeyboardButton:
-        return InlineKeyboardButton(text=text, callback_data=f"warehouse:qty:{token}:{amount}")
+        return InlineKeyboardButton(
+            text=text, callback_data=f"warehouse:qty:{token}:{amount}{origin}"
+        )
 
     steps = [step for step in QUANTITY_STEPS if step == 1 or available > step]
     decrease = [
@@ -70,7 +107,7 @@ def render_warehouse_quantity(view: WarehouseView, selected: int) -> Screen:
     rows.append(
         [
             InlineKeyboardButton(
-                text="Continuar", callback_data=f"warehouse:go:{token}:{selected}"
+                text="Continuar", callback_data=f"warehouse:go:{token}:{selected}{origin}"
             )
         ]
     )
@@ -87,7 +124,7 @@ def render_warehouse_quantity(view: WarehouseView, selected: int) -> Screen:
     ]
     return Screen(
         "\n".join(lines),
-        "warehouse",
+        _image(back_to_refuge),
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -97,6 +134,8 @@ def parse_quantity_callback(data: str) -> tuple[str, str, UUID, int]:
     """Decode `warehouse:<qty|go>:<direction>:<kind>:<source>:<amount>`."""
 
     parts = data.split(":")
+    if len(parts) == 7 and parts[6] == FROM_ITEM_DETAIL:
+        parts = parts[:6]
     if len(parts) != 6:
         raise ValueError("Malformed Warehouse quantity callback")
     directions = {code: name for name, code in DIRECTION_CODE.items()}
@@ -106,7 +145,47 @@ def parse_quantity_callback(data: str) -> tuple[str, str, UUID, int]:
     return directions[parts[2]], kinds[parts[3]], UUID(hex=parts[4]), int(parts[5])
 
 
-def _render_operation(view: WarehouseView) -> Screen:
+def _render_store_confirmation(view: WarehouseView, *, from_item: bool) -> Screen:
+    """Confirmar Armazenamento (especificação visual 2026-11-28).
+
+    Pelo detalhe do item, Cancelar e Retornar cancelam a prévia e voltam ao detalhe;
+    pelo Armazém, Retornar volta ao Armazém sem cancelar, como antes.
+    """
+    token = view.operation_id.hex if view.operation_id is not None else ""
+    cancel = f"warehouse:cancel:{token}"
+    back = cancel if from_item else "warehouse:root"
+    rows = []
+    if view.status == "preview" and view.operation_id is not None:
+        rows.append(
+            [InlineKeyboardButton(text="✅ Confirmar", callback_data=f"warehouse:confirm:{token}")]
+        )
+        rows.append([InlineKeyboardButton(text="❌ Cancelar", callback_data=cancel)])
+    rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
+    item = "\n".join(
+        (
+            _field("🎒", "Item", view.title or view.item_kind or "Item"),
+            _field("📦", "Quantidade", view.quantity),
+        )
+    )
+    capacity = "\n".join(
+        (
+            _field("💼", "Inventário", f"{view.inventory_used}/{view.inventory_capacity}"),
+            _field("🗄️", "Armazém", f"{view.warehouse_used}/{view.warehouse_capacity}"),
+        )
+    )
+    return Screen(
+        "\n\n".join(
+            (f"<b>{escape(STORE_TITLE)}</b>", f"<i>{escape(STORE_TEXT)}</i>", item, capacity)
+        ),
+        CHARACTER_SKIN,
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )
+
+
+def _render_operation(view: WarehouseView, *, from_item: bool = False) -> Screen:
+    if view.direction == "deposit":
+        return _render_store_confirmation(view, from_item=from_item)
     direction = {
         "deposit": "Depositar no Armazém",
         "withdraw": "Retirar do Armazém",
@@ -182,7 +261,7 @@ def _render_sources(view: WarehouseView, page: int) -> Screen:
     )
 
 
-def render_warehouse_store_menu() -> Screen:
+def render_warehouse_store_menu(*, back_to_refuge: bool = False) -> Screen:
     """Escolha do tipo de item a guardar; preserva a operação real de depósito."""
     rows = [
         [
@@ -197,7 +276,7 @@ def render_warehouse_store_menu() -> Screen:
     ]
     return Screen(
         "<b>🗄️ Armazém</b>\n\n<i>Escolha o que guardar a partir do inventário.</i>",
-        "warehouse",
+        _image(back_to_refuge),
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -218,7 +297,7 @@ def _render_root(view: WarehouseView, page: int, back_to_refuge: bool) -> Screen
             list_item(position, entry, entry.id) for position, entry in enumerate(entries, start=1)
         )
         if entries
-        else "<i>O Armazém está vazio.</i>"
+        else f"<i>{escape(WAREHOUSE_EMPTY_TEXT)}</i>"
     )
     header = "\n".join(
         (

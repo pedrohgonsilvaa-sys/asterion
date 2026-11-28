@@ -189,14 +189,8 @@ def character_progression_router(
                 index, expected = _from_base36(parts[2]), _from_base36(parts[3])
                 view = await active_arts.view(actor)
                 art_id = _art_by_index(view, index) if view is not None else None
-                if (
-                    view is None
-                    or expected != view.combat_configuration_version
-                    or (
-                        art_id not in view.available_art_ids
-                        and not any(entry.art_id == art_id for entry in view.slots)
-                    )
-                ):
+                # Artes bloqueadas também abrem o detalhe, só para leitura.
+                if view is None or expected != view.combat_configuration_version:
                     await query.answer("A tela foi atualizada.")
                     await show_arts(query)
                     return

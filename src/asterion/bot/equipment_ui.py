@@ -19,7 +19,15 @@ from asterion.bot.item_lines import (
     stat_line,
     stat_parts,
 )
-from asterion.bot.ui_format import keycap, numeric_rows, page_bounds, page_nav, pairs, roman
+from asterion.bot.ui_format import (
+    CHARACTER_SKIN,
+    keycap,
+    numeric_rows,
+    page_bounds,
+    page_nav,
+    pairs,
+    roman,
+)
 from asterion.domain.equipment import EquipmentSlot
 from asterion.domain.equipment_modifications import (
     ENCHANTMENT_FAMILIES,
@@ -89,8 +97,8 @@ ROOT_SLOTS = (
     (EquipmentSlot.ARTEFATO, "Artefato", "🔮"),
 )
 ROOT_SLOT_EMOJI = {slot: emoji for slot, _, emoji in ROOT_SLOTS}
-ROOT_PAGE_SIZE = 4
-ROOT_PAGES = 2
+
+
 CANDIDATES_PER_PAGE = 6
 HANDS_LABELS = {"1 mão": "1 Mão", "2 mãos": "2 Mãos"}
 EMPTY_CANDIDATES_TEXT = (
@@ -109,12 +117,13 @@ def _item_name(item: EquipmentItemView) -> str:
 
 
 def render_equipment_root(view: EquipmentRootView, page: int = 0) -> Screen:
-    """Quatro posições por página, em duas páginas, com os atributos de cada peça."""
-    page = min(max(page, 0), ROOT_PAGES - 1)
-    start = page * ROOT_PAGE_SIZE
+    """As 8 posições numa única página, com os atributos de cada peça.
+
+    ``page`` fica só para callbacks antigos (``eq:r:1``) e não muda a tela.
+    """
     blocks = []
     buttons = []
-    for index in range(start, min(start + ROOT_PAGE_SIZE, len(view.slots))):
+    for index in range(len(view.slots)):
         slot_view = view.slots[index]
         slot, label, emoji = ROOT_SLOTS[index]
         head = f"{emoji} <b>{escape(label)}</b> · "
@@ -137,13 +146,12 @@ def render_equipment_root(view: EquipmentRootView, page: int = 0) -> Screen:
             )
         )
     rows = pairs(buttons)
-    rows.append(page_nav(page, ROOT_PAGES, lambda target: f"eq:r:{target}" if target else "eq:r"))
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data="character:root")])
     return Screen(
         "\n\n".join(
             (f"<b>{escape(ROOT_TITLE)}</b>", f"<i>{escape(ROOT_TEXT)}</i>", "\n\n".join(blocks))
         ),
-        "equipment",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )
@@ -178,12 +186,25 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
     parts = [f"<b>{icon} {escape(_item_name(item))}</b>"]
     if item.lore:
         parts.append(f"<i>{escape(item.lore)}</i>")
-    facts = [
+    # Especificação visual 2026-11-28: atributos | Grau, Raridade, Quantidade |
+    # Empunhadura, Proficiência, Vínculo, em três blocos.
+    stats = [
         _field(attr_icon, label, value)
         for attr_icon, label, value in stat_parts(item.contribution, attack_icon="🗡️")
     ]
-    facts.append(_field("✨", "Grau", roman(equipment_grade(item.item_level))))
-    facts.append(_field(RARITY_ICON.get(rarity, "⚪"), "Raridade", rarity))
+    if stats:
+        parts.append("\n".join(stats))
+    parts.append(
+        "\n".join(
+            (
+                _field("✨", "Grau", roman(equipment_grade(item.item_level))),
+                _field(RARITY_ICON.get(rarity, "⚪"), "Raridade", rarity),
+                # Cada equipamento é uma instância única: a quantidade é sempre 1.
+                _field("📦", "Quantidade", "1"),
+            )
+        )
+    )
+    facts = []
     if item.weapon_handedness_label:
         hands = HANDS_LABELS.get(item.weapon_handedness_label, item.weapon_handedness_label)
         facts.append(_field("✋", "Empunhadura", hands))
@@ -191,7 +212,8 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
         facts.append(_field("🎓", "Proficiência", proficiency))
     if item.bound:
         facts.append(_field("🔗", "Vínculo", "Vinculado"))
-    parts.append("\n".join(facts))
+    if facts:
+        parts.append("\n".join(facts))
     for rune in item.runes:
         family = str(rune.get("family") or "")
         attribute = RUNE_FAMILIES.get(family, (None, None))[0]
@@ -244,7 +266,7 @@ def render_equipment_detail(view: EquipmentDetailView, *, context: str) -> Scree
     rows.append([InlineKeyboardButton(text="↩️ Retornar", callback_data=back)])
     return Screen(
         "\n\n".join(parts),
-        "equipment_item",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -262,7 +284,7 @@ def render_equipment_candidates(view: EquipmentCandidatesView, page: int = 0) ->
         )
         return Screen(
             f"{title}\n\n<i>{escape(text)}</i>",
-            "equipment",
+            CHARACTER_SKIN,
             InlineKeyboardMarkup(inline_keyboard=[back]),
             parse_mode="HTML",
         )
@@ -288,7 +310,7 @@ def render_equipment_candidates(view: EquipmentCandidatesView, page: int = 0) ->
     rows.append(back)
     return Screen(
         "\n\n".join((title, f"<i>{escape(CANDIDATES_TEXT)}</i>", "\n\n".join(blocks))),
-        "equipment",
+        CHARACTER_SKIN,
         InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row]),
         parse_mode="HTML",
     )

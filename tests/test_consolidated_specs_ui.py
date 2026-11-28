@@ -320,14 +320,15 @@ def test_material_detail_shows_grade_quantity_type_and_bind():
         "💧 <b>Resíduo do Ocaso</b>\n\n"
         "<i>Um resíduo condensado das forças que atravessam as regiões de Asterion.</i>\n\n"
         "✨ <b>Grau</b> · <code>I</code>\n"
-        "📦 <b>Quantidade</b> · <code>1</code>\n"
+        "📦 <b>Quantidade</b> · <code>1</code>\n\n"
         "🧱 <b>Tipo</b> · <code>Material</code>\n"
         "🔗 <b>Vínculo</b> · <code>Vinculado</code>"
     )
-    assert _labels(screen) == [["📦 Guardar"], ["🗑️ Descartar"], ["↩️ Retornar"]]
+    assert _labels(screen) == [["📥 Guardar", "🗑️ Descartar"], ["↩️ Retornar"]]
     assert screen.keyboard.inline_keyboard[0][0].callback_data == (
-        "warehouse:deposit:material:0f0f0f0f000000000000000000000001"
+        "warehouse:deposit:material:0f0f0f0f000000000000000000000001:i"
     )
+    assert screen.image_key == "character"
     listing = InventoryView("inventory_category", uuid4(), 2, category="materials",
                             entries=(entry,))
     from asterion.bot.inventory_ui import render_inventory
@@ -357,15 +358,94 @@ def _arts_view(**overrides) -> ActiveArtCharacterView:
     return ActiveArtCharacterView(**data)
 
 
-def test_arts_root_lists_equipped_and_known_arts_with_first_word_buttons():
+_ARTS_HEADER = (
+    "<b>🧿 Artes</b>\n\n<i>Artes são técnicas especiais que permitem canalizar "
+    "habilidades únicas durante os confrontos de Asterion.</i>\n\n"
+)
+_EMPTY_SLOTS = (
+    "📜 <b>Artes Equipadas</b>\n\n<code>⛔️ Vazio</code>\n<code>⛔️ Vazio</code>\n"
+    "<code>⛔️ Vazio</code>\n\n"
+)
+
+
+def test_arts_page_one_lists_all_class_arts_with_lock_state():
+    """Especificação visual 2026-11-28, Página 1."""
     screen = render_art_root(_arts_view())
     assert screen.text == (
-        "<b>🧿 Artes</b>\n\n<i>Artes são técnicas especiais que permitem canalizar "
-        "habilidades únicas durante os confrontos de Asterion.</i>\n\n"
-        "✨ <b>Artes Equipadas</b>\n\n1️⃣ <code>Vazio</code>\n2️⃣ <code>Vazio</code>\n"
-        "3️⃣ <code>Vazio</code>\n\n📚 <b>Artes Conhecidas</b>\n\n⚔️ <code>Golpe de Guarda</code>"
+        _ARTS_HEADER
+        + "📄 <b>Página</b> · <code>1/3</code>\n\n"
+        + _EMPTY_SLOTS
+        + "🛡️ <b>Artes da Classe</b> · <code>Sentinela</code>\n\n"
+        "#1 ⚔️ <b>Golpe de Guarda</b> · <code>Nv. 1</code>\n"
+        "#2 🔒 <b>Quebra-Postura</b> · <code>Nv. 4</code>\n"
+        "#3 🔒 <b>Muralha Breve</b> · <code>Nv. 7</code>\n"
+        "#4 🔒 <b>Impacto Resoluto</b> · <code>Nv. 9</code>\n"
+        "#5 🔒 <b>Firmeza</b> · <code>Nv. 18</code>\n"
+        "#6 🔒 <b>Golpe de Rechaço</b> · <code>Nv. 34</code>"
     )
-    assert _labels(screen) == [["⚔️ Golpe"], ["↩️ Retornar"]]
+    assert _labels(screen) == [
+        ["1️⃣", "2️⃣", "3️⃣"],
+        ["4️⃣", "5️⃣", "6️⃣"],
+        ["▶️ Próxima"],
+        ["↩️ Retornar"],
+    ]
+    assert screen.image_key == "character"
+
+
+def test_arts_pages_two_and_three_list_each_path():
+    second = render_art_root(_arts_view(), 1)
+    assert second.text == (
+        _ARTS_HEADER
+        + "📄 <b>Página</b> · <code>2/3</code>\n\n"
+        + _EMPTY_SLOTS
+        + "🏰 <b>Artes do Caminho</b> · <code>Bastião</code>\n\n"
+        "#1 🔒 <b>Escudo de Cinzas</b> · <code>Nv. 12</code>\n"
+        "#2 🔒 <b>Interpor</b> · <code>Nv. 22</code>\n"
+        "#3 🔒 <b>Contra-Golpe</b> · <code>Nv. 38</code>\n"
+        "#4 🔒 <b>Última Muralha</b> · <code>Nv. 52</code>"
+    )
+    assert _labels(second) == [
+        ["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"], ["◀️ Anterior", "▶️ Próxima"], ["↩️ Retornar"],
+    ]
+    third = render_art_root(_arts_view(), 2)
+    assert "📄 <b>Página</b> · <code>3/3</code>" in third.text
+    assert (
+        "💥 <b>Artes do Caminho</b> · <code>Devastador</code>\n\n"
+        "#1 🔒 <b>Aríete</b> · <code>Nv. 12</code>\n"
+        "#2 🔒 <b>Golpe de Ruptura</b> · <code>Nv. 22</code>\n"
+        "#3 🔒 <b>Abalo</b> · <code>Nv. 38</code>\n"
+        "#4 🔒 <b>Ruptor</b> · <code>Nv. 52</code>"
+    ) in third.text
+    assert _labels(third) == [["1️⃣", "2️⃣"], ["3️⃣", "4️⃣"], ["◀️ Anterior"], ["↩️ Retornar"]]
+
+
+def test_arts_equipped_state_fills_slot_and_marks_the_list():
+    golpe = SENTINEL_ART_IDS["golpe_de_guarda"]
+    screen = render_art_root(_arts_view(slots=(ActiveArtSlotSnapshot(2, golpe),)))
+    assert (
+        "📜 <b>Artes Equipadas</b>\n\n<code>⛔️ Vazio</code>\n"
+        "<code>⚔️ Golpe de Guarda</code>\n<code>⛔️ Vazio</code>"
+    ) in screen.text
+    assert "#1 ✅ <b>Golpe de Guarda</b> · <code>Nv. 1</code>" in screen.text
+
+
+def test_unchosen_path_arts_stay_locked_after_level_12():
+    escudo = "path_art.sentinela.bastiao.escudo_de_cinzas"
+    view = _arts_view(
+        level=20,
+        selected_path="bastiao",
+        available_art_ids=(SENTINEL_ART_IDS["golpe_de_guarda"], escudo),
+    )
+    chosen = render_art_root(view, 1).text
+    assert "<b>Escudo de Cinzas</b>" in chosen and "🔒 <b>Escudo de Cinzas</b>" not in chosen
+    assert "#1 🔒 <b>Aríete</b>" in render_art_root(view, 2).text
+
+
+def test_locked_art_detail_is_read_only_and_returns_to_its_page():
+    screen = render_art_detail(_arts_view(), "path_art.sentinela.devastador.ariete")
+    assert _labels(screen) == [["↩️ Retornar"]]
+    assert screen.keyboard.inline_keyboard[-1][0].callback_data == "art:p:2"
+    assert "🔓 <b>Desbloqueio</b> · <code>Nv. 12</code>" in screen.text
 
 
 def test_art_detail_chooses_the_slot_directly():
@@ -411,7 +491,8 @@ async def test_equipping_an_art_returns_to_arts_and_incompatible_weapon_alerts()
         for call in reversed(bot.session.make_request.call_args_list)
         if isinstance(call.args[1], EditMessageText)
     )
-    assert "<b>🧿 Artes</b>" in screen.text and "2️⃣ <code>Disparo Preciso</code>" in screen.text
+    assert "<b>🧿 Artes</b>" in screen.text
+    assert "<code>⛔️ Vazio</code>\n<code>⚔️ Disparo Preciso</code>" in screen.text
 
     incompatible = _arts_view(
         character_class="vigia",
