@@ -1,12 +1,11 @@
-"""Live turn countdown for Foreground combat (Bloco UI 1 §7).
+"""Silent 10 s turn watch for Foreground combat.
 
 The engine owns the turn: ``Combat.turn_deadline`` is stamped when a player's turn
-opens and every action checks it (``domain/combat.act``). This module never keeps a
-clock of its own. Once per second it re-reads the authoritative combat through the
-service, re-renders the HUD (``🌐 Turno N · ⏱️ 9s``) and edits only the message
-text/caption. When the deadline has passed it asks the service to apply the existing
-timeout rule (the overdue turn is spent once, by ``act``/``expire_turn``), and the
-next read shows the fresh turn at ``10s``.
+opens and every action checks it (``domain/combat.act``). The countdown is no longer
+shown: this watch sleeps until the deadline, then asks the service to apply the
+existing timeout rule (the overdue turn is spent once, by ``act``/``expire_turn``).
+The HUD is therefore edited only when the turn actually changes (a player action or
+a timeout), never once per second.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import asyncio
 import contextlib
 import itertools
 import logging
-import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
@@ -186,9 +184,8 @@ class CombatTicker:
                 await self._sleep(_SETTLE)
                 await expire()
                 continue
-            # Wake on the next whole second so the display steps 10s → 9s → … → 0s.
-            fraction = left - math.floor(left)
-            await self._sleep((fraction if fraction > 0 else 1.0) + _SETTLE)
+            # Nothing is displayed per second: sleep straight to the deadline.
+            await self._sleep(left + _SETTLE)
 
     async def _edit(self, bot, chat_id, message_id, screen: Screen, caption: bool):
         """Edit only the words and buttons: the picture of the encounter stays put."""

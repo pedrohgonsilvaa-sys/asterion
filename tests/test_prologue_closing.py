@@ -135,7 +135,7 @@ def test_first_turn_hud_has_no_level_and_one_narrative_line(enemy_id, emoji, ene
         f"❤️ <code>{max_hp:.0f}/{max_hp:.0f}</code>",
         "🟩" * 10,
         "",
-        "<code>🌐 Turno 1 · ⏱️ 10s</code>",
+        "<code>🌐 Turno 1</code>",
         "",
         "<b>📜 Histórico de Combate:</b>",
         OPENING_HISTORY[enemy_id],
@@ -158,7 +158,7 @@ def test_later_turns_show_mechanical_history_without_the_appearance_line(
                                         combat, view.stage, 0)))
     from asterion.bot.prologue_ui import OPENING_HISTORY, PERSISTENT_NARRATION
 
-    assert "<code>🌐 Turno 2 · ⏱️ 10s</code>" in screen.text
+    assert "<code>🌐 Turno 2</code>" in screen.text
     assert "<b>📜 Histórico de Combate:</b>\n⚔️" in screen.text
     # A narração persistente fica; a primeira linha do Histórico dá lugar ao combate.
     assert screen.text.startswith(f"<i>{PERSISTENT_NARRATION[enemy_id]}</i>\n")
@@ -344,13 +344,15 @@ def test_late_action_is_not_accepted_and_the_turn_times_out_once(clock):
     assert again.version == late.version
 
 
-def test_timer_shows_in_hud_monospaced_and_counts_down(clock):
+def test_turn_line_has_no_visible_countdown(clock):
+    """The 10 s rule stays in the engine; the HUD shows only the turn number."""
     view = combat_view("corvo_fuligem")
     clock.advance(3)
-    text = render_combat(view).text
-    assert "<code>🌐 Turno 1 · ⏱️ 7s</code>" in text
+    assert "<code>🌐 Turno 1</code>" in render_combat(view).text
     clock.advance(20)
-    assert "<code>🌐 Turno 1 · ⏱️ 0s</code>" in render_combat(view).text
+    text = render_combat(view).text
+    assert "<code>🌐 Turno 1</code>" in text
+    assert "⏱️" not in text
 
 
 def test_history_sits_right_under_its_heading_without_blank_line():
@@ -358,7 +360,7 @@ def test_history_sits_right_under_its_heading_without_blank_line():
     assert "<b>📜 Histórico de Combate:</b>\n🐦 <i>O Corvo de Fuligem abre as asas" in text
     assert "<b>📜 Histórico de Combate:</b>\n\n" not in text
     # Uma linha em branco entre o turno e o Histórico.
-    assert "⏱️ 10s</code>\n\n<b>📜 Histórico de Combate:</b>" in text
+    assert "<code>🌐 Turno 1</code>\n\n<b>📜 Histórico de Combate:</b>" in text
     assert "❤️ <code>" in text and "<b>🐦 Corvo de Fuligem</b>" in text
     assert f"<b>🏹 {NAME}</b>" in text
 

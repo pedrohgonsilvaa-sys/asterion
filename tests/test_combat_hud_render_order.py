@@ -87,7 +87,7 @@ async def test_countdown_restart_after_an_action_does_not_resend_the_same_hud(cl
 
     async def refresh():
         ticks["n"] += 1
-        if ticks["n"] > 3:
+        if ticks["n"] > 1:
             return None
         return Tick(_screen(turn_line(1, turn_seconds_left(state))), state)
 
@@ -133,33 +133,29 @@ async def test_writes_to_one_message_never_overlap_in_telegram(ids):
     assert bot.captions[-1] == "new"
 
 
-async def test_countdown_keeps_one_edit_per_second_when_an_action_lands_mid_turn(clock, ids):
+async def test_countdown_edits_only_when_the_turn_changes(clock, ids):
+    """No per-second edits: the watch sleeps to the deadline and redraws on turn change."""
     state = SimpleNamespace(result=None, turn_deadline=clock.now + 10, turn=1)
     bot = CaptionBot()
     ticker_under_test = CombatTicker(sleep=lambda s: _advance(clock, s))
     key = (ids.chat, ids.message)
-    ticks = {"n": 0}
-    action_done = {"v": False}
+    expired: list[int] = []
 
     async def refresh():
-        ticks["n"] += 1
-        if ticks["n"] == 4 and not action_done["v"]:
-            # Player acts at ~7s left: commit a new turn, then the action's own render.
-            action_done["v"] = True
-            state.turn_deadline = clock.now + 10
-            ticket = ticker_under_test.begin()
-            hud = turn_line(1, turn_seconds_left(state))
-            await ticker_under_test.write(*key, ticket, _screen(hud), lambda: _caption(bot, hud))
-        if ticks["n"] > 6:
+        if state.turn > 2:
             return None
-        return Tick(_screen(turn_line(1, turn_seconds_left(state))), state)
+        return Tick(_screen(turn_line(state.turn)), state)
 
-    await ticker_under_test._run(bot, *key, refresh, _never_expire)
+    async def expire():
+        expired.append(state.turn)
+        state.turn += 1
+        state.turn_deadline = clock.now + 10
 
-    assert _no_duplicate_in_a_row(bot.captions)
+    await ticker_under_test._run(bot, *key, refresh, expire)
+
+    assert expired == [1, 2]
+    assert bot.captions == [turn_line(1), turn_line(2)]
     assert bot.max_inflight == 1
-    # One edit per whole-second step, plus the action's own render: never a burst.
-    assert len(bot.captions) <= 8
 
 
 async def test_present_redraws_on_every_tap_like_before(ids):

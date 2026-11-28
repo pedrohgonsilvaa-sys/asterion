@@ -62,7 +62,7 @@ async def test_first_hud_matches_authoritative_shape(prologue, database):
     )
     assert "<b>🛡️ Heroa</b>\n❤️ <code>" in screen.text
     assert (
-        "<code>🌐 Turno 1 · ⏱️ 10s</code>\n\n<b>📜 Histórico de Combate:</b>\n🐺 <i>"
+        "<code>🌐 Turno 1</code>\n\n<b>📜 Histórico de Combate:</b>\n🐺 <i>"
     ) in screen.text
     assert "O Primeiro Confronto" not in screen.text and "combate começa" not in screen.text
     assert "Causa Dano" not in screen.text and "Reduz Dano" not in screen.text
@@ -386,7 +386,7 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     assert [row[0].text for row in screen.keyboard.inline_keyboard] == [
         "⚔️ Atacar", "🛡️ Defender", "🗡️ Golpe de Guarda"
     ]
-    assert "<code>🌐 Turno 2 · ⏱️ 10s</code>" in screen.text
+    assert "<code>🌐 Turno 2</code>" in screen.text
     assert "⚔️ O golpe atinge o Cão Cinéreo e causa <b>" in screen.text
     assert "🐺 O Cão Cinéreo ataca e causa <b>" in screen.text or "💨 O ataque do" in screen.text
     assert "Heroa causou" not in screen.text
@@ -396,7 +396,7 @@ async def test_hud_reconstructs_persisted_events_and_tutorial_buttons(prologue, 
     assert [row[0].text for row in screen.keyboard.inline_keyboard] == [
         "⚔️ Atacar", "🗡️ Golpe de Guarda"
     ]
-    assert "<code>🌐 Turno 3 · ⏱️ 10s</code>" in screen.text
+    assert "<code>🌐 Turno 3</code>" in screen.text
     assert "🛡️ Defender foi usado." in screen.text
     assert "Arte de Classe" not in screen.text
     # Reconnect uses the same persisted log and controls.
