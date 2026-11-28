@@ -280,7 +280,7 @@ async def test_all_six_classes_acquire_persist_and_use_nv35_talents(database):
 
         for definition in tier35:
             detail = render_talent_detail(view, definition)
-            assert "Adquirir Talento" in [
+            assert "🌿 Adquirir" in [
                 button.text
                 for row in detail.keyboard.inline_keyboard
                 for button in row

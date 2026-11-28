@@ -30,7 +30,6 @@ from asterion.bot.character_progression_ui import (
     render_art_root,
     render_talent_detail,
     render_talent_list,
-    render_talent_root,
 )
 from asterion.domain.arts import ART_IDS_BY_CLASS, DEVASTADOR_ART_IDS
 from asterion.domain.combat_math import (
@@ -276,18 +275,19 @@ def test_talent_and_art_screens_render_every_class_catalog_without_future_execut
             False,
         )
         listing = render_talent_list(view)
-        assert sum(talent.name in listing.text for talent in talents) == 18
-        assert "Nv.15" in listing.text and "Requer Nv.15" in listing.text
-        assert "Disponível" in listing.text and "Adquirido" in listing.text
-        root = render_talent_root(view)
-        assert "Disponíveis · 1" in root.text
+        second = render_talent_list(view, 1)
+        both = listing.text + second.text
+        assert sum(talent.name in both for talent in talents) == 18
+        assert "Requer Nv. 15" in both
+        assert "Disponível" in both and "Adquirido" in both
+        assert "<code>1</code>" in listing.text
         assert all(
             len(button.callback_data.encode("utf-8")) <= 64
             for row in listing.keyboard.inline_keyboard
             for button in row
         )
         detail = render_talent_detail(view, talents[1])
-        assert "Adquirir Talento" in [
+        assert "🌿 Adquirir" in [
             button.text for row in detail.keyboard.inline_keyboard for button in row
         ]
 
@@ -477,7 +477,7 @@ async def test_talent_acquire_and_respec_share_foreground_guard(database):
 
 
 @pytest.mark.asyncio
-async def test_talent_respec_rejects_wrong_location_balance_and_foreground(database):
+async def test_talent_respec_rejects_balance_and_foreground_in_any_location(database):
     actor = 772106
     character_id, sessions = await _seed_character(
         database, actor, level=10, crowns=1000, location="Bosque Calcinado"
@@ -493,10 +493,6 @@ async def test_talent_respec_rejects_wrong_location_balance_and_foreground(datab
     service = TalentService(sessions, "ocaso")
     before = await service.view(actor)
     assert before is not None
-    with pytest.raises(TalentMutationRejected) as location:
-        await service.respec(actor, before.combat_configuration_version)
-    assert location.value.code == TalentMutationCode.WRONG_LOCATION
-
     async with sessions.begin() as session:
         world = await session.get(WorldState, character_id)
         character = await session.get(Character, character_id)

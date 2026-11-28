@@ -14,12 +14,12 @@ from asterion.application.talents import (
     TalentService,
 )
 from asterion.bot.character_progression_ui import (
+    TALENTS_PER_PAGE,
     render_art_detail,
     render_art_root,
     render_talent_detail,
     render_talent_list,
     render_talent_respec,
-    render_talent_root,
 )
 from asterion.bot.creation_handlers import present
 from asterion.domain.arts import (
@@ -36,6 +36,10 @@ def _from_base36(value: str) -> int:
 
 def _talent_by_index(view, index: int):
     return TALENTS_BY_CLASS[view.character_class][index]
+
+
+def _talent_page(index: int) -> int:
+    return index // TALENTS_PER_PAGE
 
 
 def _art_by_index(view, index: int) -> str:
@@ -61,16 +65,16 @@ def character_progression_router(
     router = Router(name="character_progression")
     router.callback_query.filter(F.message.chat.type == "private")
 
-    async def show_talents(query: CallbackQuery, *, screen: str = "root", index: int = 0):
+    async def show_talents(
+        query: CallbackQuery, *, screen: str = "list", index: int = 0, page: int = 0
+    ):
         if not isinstance(query.message, Message):
             return
         view = await talents.view(query.from_user.id)
         if view is None:
             await query.answer("Personagem indisponível.", show_alert=True)
             return
-        if screen == "list":
-            rendered = render_talent_list(view)
-        elif screen == "detail":
+        if screen == "detail":
             try:
                 rendered = render_talent_detail(view, _talent_by_index(view, index))
             except IndexError:
@@ -78,7 +82,7 @@ def character_progression_router(
         elif screen == "respec":
             rendered = render_talent_respec(view)
         else:
-            rendered = render_talent_root(view)
+            rendered = render_talent_list(view, page)
         await present(query.message, rendered, images, edit=True)
 
     async def show_arts(
@@ -116,21 +120,21 @@ def character_progression_router(
             await query.answer()
             await show_talents(query)
             return
+        if len(parts) == 3 and parts[1] == "p" and parts[2].isdecimal():
+            await query.answer()
+            await show_talents(query, page=int(parts[2]))
+            return
         try:
             action = parts[1]
-            if action in {"list", "respec"} and len(parts) == 3:
+            if action == "respec" and len(parts) == 3:
                 expected = _from_base36(parts[2])
                 view = await talents.view(actor)
                 if view is None or expected != view.combat_configuration_version:
                     await query.answer("A tela foi atualizada.")
-                    await show_talents(query, screen="list" if action == "list" else "root")
+                    await show_talents(query)
                     return
-                if action == "list":
-                    await query.answer()
-                    await show_talents(query, screen="list")
-                else:
-                    await query.answer()
-                    await show_talents(query, screen="respec")
+                await query.answer()
+                await show_talents(query, screen="respec")
                 return
             if action in {"d", "a"} and len(parts) == 4:
                 index, expected = _from_base36(parts[2]), _from_base36(parts[3])
@@ -150,7 +154,7 @@ def character_progression_router(
                     expected_configuration_version=expected,
                 )
                 await query.answer()
-                await show_talents(query, screen="list")
+                await show_talents(query, page=_talent_page(index))
                 return
             if action == "rc" and len(parts) == 3:
                 expected = _from_base36(parts[2])
@@ -165,7 +169,7 @@ def character_progression_router(
                 else "A configuração não pôde ser alterada."
             )
             await query.answer(message)
-            await show_talents(query, screen="list")
+            await show_talents(query)
             return
         await query.answer("A tela foi atualizada.")
         await show_talents(query)
@@ -240,14 +244,6 @@ def character_progression_router(
                         else "uma arma compatível"
                     )
                     await query.answer(f"Requer {label} equipada.", show_alert=True)
-                    return
-                equipped_slot = next(
-                    (entry.slot for entry in view.slots if entry.art_id == art_id), None
-                )
-                if equipped_slot is not None and equipped_slot != slot:
-                    await query.answer(
-                        f"Esta Arte já está equipada em Slot {equipped_slot}.", show_alert=True
-                    )
                     return
                 await active_arts.equip_art(
                     actor,

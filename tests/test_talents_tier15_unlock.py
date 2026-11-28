@@ -21,7 +21,6 @@ from asterion.application.talents import (
 from asterion.bot.character_progression_ui import (
     render_talent_detail,
     render_talent_list,
-    render_talent_root,
 )
 from asterion.domain.arts import (
     ERRANTE_ART_IDS,
@@ -243,7 +242,7 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         tier15 = TALENTS_BY_CLASS[character_class][3:6]
         locked_detail = render_talent_detail(view, tier15[0])
         assert "Requer Nv.15" in locked_detail.text
-        assert "Adquirir Talento" not in [
+        assert "🌿 Adquirir" not in [
             button.text
             for row in locked_detail.keyboard.inline_keyboard
             for button in row
@@ -257,10 +256,10 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
             character.level = 15
         view = await service.view(actor)
         assert view is not None and view.total_points == 3 and view.available_points == 3
-        assert "Disponíveis · 3" in render_talent_root(view).text
+        assert "<b>Pontos de Talento</b> · <code>3</code>" in render_talent_list(view).text
         for talent in tier15:
             detail = render_talent_detail(view, talent)
-            assert "Adquirir Talento" in [
+            assert "🌿 Adquirir" in [
                 button.text
                 for row in detail.keyboard.inline_keyboard
                 for button in row
@@ -286,7 +285,7 @@ async def test_all_six_classes_can_acquire_all_nv15_talents_and_reload_public_sn
         future = next(talent for talent in TALENTS_BY_CLASS[character_class] if talent.level == 35)
         assert f"{future.name} · Requer Nv.35" in listing.text
         detail = render_talent_detail(view, future)
-        assert "Adquirir Talento" not in [
+        assert "🌿 Adquirir" not in [
             button.text
             for row in detail.keyboard.inline_keyboard
             for button in row

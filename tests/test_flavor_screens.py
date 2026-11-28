@@ -15,7 +15,7 @@ from asterion.application.professions import ProfessionHomeView
 from asterion.application.road import ALTOS_ESCARPA_LABEL, CONFINS_MARCHA_LABEL
 from asterion.application.talents import TalentView
 from asterion.bot import flavor_ui, world_handlers
-from asterion.bot.character_progression_ui import render_art_root, render_talent_root
+from asterion.bot.character_progression_ui import render_art_root
 from asterion.bot.chronicle_ui import render_calendar
 from asterion.bot.creation_ui import Screen
 from asterion.bot.equipment_ui import render_equipment_root
@@ -77,7 +77,6 @@ SPEC_SCREENS = {
 }
 
 SYSTEM_SCREENS = {
-    "talentos": lambda: render_talent_root(_talent_view()),
     "oficios": lambda: render_profession_home(_profession_view()),
     "legado": lambda: render_legacy(_legacy_view()),
     "calendario": lambda: render_calendar(_chronicle_view(Phase.UNSCHEDULED, None), CALENDAR_NOW),

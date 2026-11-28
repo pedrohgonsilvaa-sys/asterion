@@ -150,9 +150,19 @@ async def test_equip_three_slots_order_duplicate_noop_and_unequip(database):
     assert repeat is not None and not repeat.changed
     assert repeat.combat_configuration_version == 3
 
-    with pytest.raises(ActiveArtMutationRejected) as duplicate:
-        await service.equip_art(actor, 2, arts[0], expected_configuration_version=3)
-    assert duplicate.value.code == ActiveArtMutationCode.DUPLICATE_ART
+    # Arte já equipada em outro slot ocupado: as duas trocam de posição.
+    swapped = await service.equip_art(actor, 2, arts[0], expected_configuration_version=3)
+    assert swapped is not None and swapped.changed and swapped.combat_configuration_version == 4
+    async with sessions.begin() as session:
+        character = await session.get(Character, character_id)
+        after_swap = await load_active_art_configuration(session, character)
+    assert [(row.slot, row.art_id) for row in after_swap.slots] == [
+        (1, arts[1]),
+        (2, arts[0]),
+        (3, arts[2]),
+    ]
+    restored = await service.equip_art(actor, 1, arts[0], expected_configuration_version=4)
+    assert restored is not None and restored.changed and restored.combat_configuration_version == 5
 
     async with sessions.begin() as session:
         character = await session.get(Character, character_id)
@@ -162,14 +172,14 @@ async def test_equip_three_slots_order_duplicate_noop_and_unequip(database):
         (2, arts[1]),
         (3, arts[2]),
     ]
-    assert snapshot.combat_configuration_version == 3
+    assert snapshot.combat_configuration_version == 5
 
-    removed = await service.unequip_slot(actor, 2, expected_configuration_version=3)
+    removed = await service.unequip_slot(actor, 2, expected_configuration_version=5)
     assert removed is not None and removed.changed
-    assert removed.combat_configuration_version == 4
-    empty = await service.unequip_slot(actor, 2, expected_configuration_version=4)
+    assert removed.combat_configuration_version == 6
+    empty = await service.unequip_slot(actor, 2, expected_configuration_version=6)
     assert empty is not None and not empty.changed
-    assert empty.combat_configuration_version == 4
+    assert empty.combat_configuration_version == 6
 
 
 @pytest.mark.asyncio

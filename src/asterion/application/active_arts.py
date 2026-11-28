@@ -282,8 +282,6 @@ class ActiveArtService:
                 (current_slot for current_slot, value in current.items() if value == art_id),
                 None,
             )
-            if existing_slot is not None and existing_slot != slot:
-                raise ActiveArtMutationRejected(ActiveArtMutationCode.DUPLICATE_ART)
             if current.get(slot) == art_id:
                 return ActiveArtMutationResult(
                     False,
@@ -292,6 +290,14 @@ class ActiveArtService:
                     character.combat_configuration_version,
                 )
             final = dict(current)
+            if existing_slot is not None:
+                # Arte já equipada em outro slot: muda de posição; se o destino estava
+                # ocupado, a Arte de lá assume o slot de origem (troca).
+                displaced = current.get(slot)
+                if displaced is None:
+                    del final[existing_slot]
+                else:
+                    final[existing_slot] = displaced
             final[slot] = art_id
             compatibility_tags = await equipped_weapon_compatibility_tags(
                 session, character.id

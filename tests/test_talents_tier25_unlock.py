@@ -233,7 +233,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
 
         for candidate in candidates:
             screen = render_talent_detail(view, candidate)
-            assert "Adquirir Talento" in [
+            assert "🌿 Adquirir" in [
                 button.text
                 for row in screen.keyboard.inline_keyboard
                 for button in row
@@ -292,7 +292,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
         assert high_level.available_points == 9
         tier35 = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 35)
         detail = render_talent_detail(high_level, tier35)
-        assert "Adquirir Talento" in [
+        assert "🌿 Adquirir" in [
             button.text
             for row in detail.keyboard.inline_keyboard
             for button in row
@@ -305,7 +305,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
         assert high_level.available_points == 8
         tier45 = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 45)
         tier45_detail = render_talent_detail(high_level, tier45)
-        assert "Adquirir Talento" in [
+        assert "🌿 Adquirir" in [
             button.text
             for row in tier45_detail.keyboard.inline_keyboard
             for button in row
@@ -320,7 +320,7 @@ async def test_all_six_classes_acquire_nv25_nv35_nv45_and_reload_public_snapshot
         future = next(t for t in TALENTS_BY_CLASS[character_class] if t.level == 55)
         future_detail = render_talent_detail(high_level, future)
         assert "Nv.55" in future_detail.text
-        assert "Adquirir Talento" in [
+        assert "🌿 Adquirir" in [
             button.text
             for row in future_detail.keyboard.inline_keyboard
             for button in row

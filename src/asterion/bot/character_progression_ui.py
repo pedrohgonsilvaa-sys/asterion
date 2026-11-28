@@ -8,7 +8,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.application.active_arts import ActiveArtCharacterView
 from asterion.application.talents import TalentView
 from asterion.bot.creation_ui import Screen
-from asterion.bot.flavor_ui import with_flavor
 from asterion.bot.ui_format import KEYCAPS, compact_numeric_rows, page_nav
 from asterion.bot.world_ui import CLASS_EMOJI
 from asterion.domain.arts import (
@@ -24,6 +23,7 @@ from asterion.domain.path_arts import (
     CARRASCO_MARCA_DA_MORTE_CHAIN,
 )
 from asterion.domain.paths import PATH_DEFINITIONS
+from asterion.domain.talent_texts import TALENT_TEXTS
 from asterion.domain.talents import IMPLEMENTED_TALENT_LEVELS, TalentDefinition
 
 
@@ -66,28 +66,12 @@ def _class_label(character_class: str) -> str:
     }.get(character_class, character_class.title())
 
 
-def render_talent_root(view: TalentView) -> Screen:
-    lines = [
-        "🌿 Talentos",
-        "",
-        *_character_lines(view.character_name, view.character_class, view.selected_path),
-        "",
-    ]
-    lines.extend(["🌿 Pontos de Talento", f"Disponíveis · {view.available_points}"])
-    rows = [[_button("Ver Talentos", f"tal:list:{_base36(view.combat_configuration_version)}")]]
-    if view.choices and not view.foreground:
-        rows.append(
-            [
-                _button(
-                    "Redistribuir Talentos",
-                    f"tal:respec:{_base36(view.combat_configuration_version)}",
-                )
-            ]
-        )
-    if view.foreground:
-        lines.extend(["", "🔒 Configuração · Bloqueada durante a atividade"])
-    rows.append([_button("← Personagem", "character:root")])
-    return with_flavor(Screen("\n".join(lines), "character", _keyboard(rows)), "talentos")
+TALENTS_PER_PAGE = 9
+TALENT_CATEGORY_EMOJI = {"Pressão": "🎋", "Resistência": "🌾", "Técnica": "🎍"}
+TALENT_RESPEC_TEXT = (
+    "Seus Talentos atuais serão removidos e os Pontos de Talento gastos serão devolvidos "
+    "para que você possa escolher uma nova distribuição."
+)
 
 
 def _talent_state(view: TalentView, talent: TalentDefinition) -> tuple[str, str]:
@@ -99,100 +83,116 @@ def _talent_state(view: TalentView, talent: TalentDefinition) -> tuple[str, str]
             return "🕰️", f"Adquirido · Retorna no Nv.{talent.level}"
         return "🕰️", "Adquirido · Ponto ainda inativo"
     if talent.level not in IMPLEMENTED_TALENT_LEVELS:
-        return "🔒", f"Requer Nv.{talent.level}"
+        return "🔒", f"Requer Nv. {talent.level}"
     if view.level < talent.level:
-        return "🔒", f"Requer Nv.{talent.level}"
+        return "🔒", f"Requer Nv. {talent.level}"
     if view.available_points > 0:
         return "✨", "Disponível"
     return "🔒", "Sem Ponto disponível"
 
 
-def render_talent_list(view: TalentView) -> Screen:
-    rows: list[list[InlineKeyboardButton]] = []
-    lines = [
-        "🌿 Talentos",
-        "",
-        *_character_lines(view.character_name, view.character_class, view.selected_path),
-        "",
+def _talent_button_label(number: int) -> str:
+    return KEYCAPS[number - 1] if number <= len(KEYCAPS) else str(number)
+
+
+def talent_page_of(view: TalentView, talent: TalentDefinition) -> int:
+    index = next(i for i, item in enumerate(view.talents) if item.talent_id == talent.talent_id)
+    return index // TALENTS_PER_PAGE
+
+
+def render_talent_list(view: TalentView, page: int = 0) -> Screen:
+    """Lista paginada (9 por página, grade 3×3); é a primeira tela de Talentos."""
+    talents = view.talents
+    pages = max(1, -(-len(talents) // TALENTS_PER_PAGE))
+    page = min(max(page, 0), pages - 1)
+    start = page * TALENTS_PER_PAGE
+    version = _base36(view.combat_configuration_version)
+    lines, buttons = [], []
+    for offset, talent in enumerate(talents[start : start + TALENTS_PER_PAGE]):
+        number = start + offset + 1
+        icon, state = _talent_state(view, talent)
+        lines.append(f"#{number} {icon} <b>{escape(talent.name)}</b> · {escape(state)}")
+        buttons.append(
+            _button(_talent_button_label(number), f"tal:d:{_base36(start + offset)}:{version}")
+        )
+    rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+    rows.append(page_nav(page, pages, lambda target: f"tal:p:{target}"))
+    rows.append([_button("🌳 Redistribuição", f"tal:respec:{version}")])
+    rows.append([_button("↩️ Retornar", "character:root")])
+    parts = [
+        "<b>🌳 Talentos</b>",
+        f"📄 <b>Página</b> · <code>{page + 1}/{pages}</code>",
+        f"🌿 <b>Pontos de Talento</b> · <code>{view.available_points}</code>",
+        "\n".join(lines),
     ]
-    for level in (5, 15, 25, 35, 45, 55):
-        lines.append(f"Nv.{level}")
-        tier = [talent for talent in view.talents if talent.level == level]
-        buttons = []
-        for talent in tier:
-            icon, state = _talent_state(view, talent)
-            lines.append(f"{icon} {escape(talent.name)} · {state}")
-            index = next(
-                i for i, item in enumerate(view.talents) if item.talent_id == talent.talent_id
-            )
-            buttons.append(
-                _button(
-                    str(index + 1),
-                    f"tal:d:{_base36(index)}:{_base36(view.combat_configuration_version)}",
-                )
-            )
-        rows.append(buttons)
-        lines.append("")
     if view.foreground:
-        lines.extend(["🔒 Configuração · Bloqueada durante a atividade", ""])
-    rows.append([_button("← Talentos", "tal:root")])
-    return Screen("\n".join(lines).rstrip(), "character", _keyboard(rows))
+        parts.append("🔒 <b>Configuração</b> · <code>Bloqueada durante a atividade</code>")
+    return Screen(
+        "\n\n".join(parts),
+        "character",
+        _keyboard([row for row in rows if row]),
+        parse_mode="HTML",
+    )
 
 
 def render_talent_detail(view: TalentView, talent: TalentDefinition) -> Screen:
     icon, state = _talent_state(view, talent)
-    lines = [
-        f"🌿 {escape(talent.name)}",
-        f"{escape(talent.category)} · Nv.{talent.level}",
-        "",
-        escape(talent.description),
-        "",
-        f"{icon} {state}",
-    ]
+    effect, narrative = TALENT_TEXTS.get(talent.talent_id, (talent.description, ""))
+    category = TALENT_CATEGORY_EMOJI.get(talent.category, "🌿")
+    parts = [f"<b>🌳 {escape(talent.name)}</b>"]
+    if narrative:
+        parts.append(f"<i>{escape(narrative)}</i>")
+    parts.append(
+        "\n".join(
+            (
+                f"⚔️ <b>Efeito</b> · <code>{escape(effect)}</code>",
+                f"{category} <b>Categoria</b> · <code>{escape(talent.category)}</code>",
+                f"🔓 <b>Requisito</b> · <code>Nv. {talent.level}</code>",
+                f"{icon} <b>Status</b> · <code>{escape(state)}</code>",
+            )
+        )
+    )
     rows = []
+    index = next(i for i, item in enumerate(view.talents) if item.talent_id == talent.talent_id)
     if state == "Disponível" and not view.foreground:
-        index = next(i for i, item in enumerate(view.talents) if item.talent_id == talent.talent_id)
         rows.append(
             [
                 _button(
-                    "Adquirir Talento",
+                    "🌿 Adquirir",
                     f"tal:a:{_base36(index)}:{_base36(view.combat_configuration_version)}",
                 )
             ]
         )
-    rows.append([_button("← Talentos", f"tal:list:{_base36(view.combat_configuration_version)}")])
-    return Screen("\n".join(lines), "character", _keyboard(rows))
+    rows.append([_button("↩️ Retornar", f"tal:p:{index // TALENTS_PER_PAGE}")])
+    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
 
 
 def render_talent_respec(view: TalentView) -> Screen:
     cost = view.respec_cost
-    safe = view.location == "Refúgio do Ocaso"
-    can_confirm = bool(view.choices) and safe and not view.foreground and view.crowns >= cost
-    lines = [
-        "🌿 Redistribuir Talentos",
-        "",
-        f"Pontos Recuperados · {len(view.choices)}",
-        f"🪙 Custo · {cost:,} Coroas".replace(",", "."),
-        "📍 Local · Refúgio do Ocaso",
+    can_confirm = bool(view.choices) and not view.foreground and view.crowns >= cost
+    cost_text = f"{cost:,} Coroas".replace(",", ".")
+    parts = [
+        "<b>🌳 Redistribuição de Talentos</b>",
+        f"<i>{escape(TALENT_RESPEC_TEXT)}</i>",
+        f"🌿 <b>Pontos Recuperados</b> · <code>{len(view.choices)}</code>\n"
+        f"🪙 <b>Custo</b> · <code>{escape(cost_text)}</code>",
     ]
     if view.foreground:
-        lines.append("🔒 Configuração · Bloqueada durante a atividade")
-    elif not safe:
-        lines.append("🔒 Local · Local Inapropriado")
+        parts.append("🔒 <b>Configuração</b> · <code>Bloqueada durante a atividade</code>")
     elif view.crowns < cost:
-        lines.append("🔒 Coroas · Insuficientes")
-    rows = []
-    if can_confirm:
-        rows.append(
-            [
-                _button(
-                    "Confirmar Redistribuição",
-                    f"tal:rc:{_base36(view.combat_configuration_version)}",
-                )
-            ]
-        )
-    rows.append([_button("← Talentos", "tal:root")])
-    return Screen("\n".join(lines), "character", _keyboard(rows))
+        parts.append("🔒 <b>Coroas</b> · <code>Insuficientes</code>")
+    elif not view.choices:
+        parts.append("🔒 <b>Talentos</b> · <code>Nenhum adquirido</code>")
+    cancel = _button("❌ Cancelar", "tal:p:0")
+    rows = [
+        [
+            _button("✅ Confirmar", f"tal:rc:{_base36(view.combat_configuration_version)}"),
+            cancel,
+        ]
+        if can_confirm
+        else [cancel]
+    ]
+    return Screen("\n\n".join(parts), "character", _keyboard(rows), parse_mode="HTML")
 
 
 def _actions_for_view(view: ActiveArtCharacterView) -> dict:

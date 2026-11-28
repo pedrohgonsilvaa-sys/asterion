@@ -220,7 +220,7 @@ async def test_all_six_classes_acquire_persist_reconstruct_and_use_nv55(database
         stale_version = view.combat_configuration_version
         for definition in definitions:
             detail = render_talent_detail(view, definition)
-            assert "Adquirir Talento" in [
+            assert "🌿 Adquirir" in [
                 button.text for row in detail.keyboard.inline_keyboard for button in row
             ]
             acquired = await service.acquire(

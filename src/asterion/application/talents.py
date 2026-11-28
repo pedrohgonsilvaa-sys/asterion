@@ -180,11 +180,6 @@ class TalentService:
             self._validated_choices(character, rows)
             if not rows:
                 raise TalentMutationRejected(TalentMutationCode.NOTHING_TO_RESPEC)
-            world = await session.scalar(
-                select(WorldState).where(WorldState.character_id == character.id).with_for_update()
-            )
-            if world is None or world.location not in SAFE_RESPEC_LOCATIONS:
-                raise TalentMutationRejected(TalentMutationCode.WRONG_LOCATION)
             cost = discounted(
                 2 * crowns_per_level(character.level),
                 (await character_work_levels(session, character.id)).respec_discount,
