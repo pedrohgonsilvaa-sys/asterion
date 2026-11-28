@@ -38,19 +38,20 @@ def clock(_frozen_turn_clock):
     return fake
 
 
-def test_turn_line_keeps_turn_and_shows_seconds():
-    assert turn_line(1, None) == "🌐 <b>Turno 1</b> · ⏱️ <code>10s</code>"
-    assert turn_line(2, 9.2) == "🌐 <b>Turno 2</b> · ⏱️ <code>10s</code>"
-    assert turn_line(2, 8.6) == "🌐 <b>Turno 2</b> · ⏱️ <code>9s</code>"
-    assert turn_line(3, 0) == "🌐 <b>Turno 3</b> · ⏱️ <code>0s</code>"
+def test_turn_line_shows_only_the_turn_number():
+    """The 10 s rule still applies, but the HUD no longer shows a countdown."""
+    assert turn_line(1, None) == "🌐 <b>Turno 1</b>"
+    assert turn_line(2, 8.6) == "🌐 <b>Turno 2</b>"
+    assert turn_line(3, 0) == "🌐 <b>Turno 3</b>"
     assert turn_clock.format_turn_seconds(10) == "10s"
 
 
-async def test_ticker_counts_down_times_out_at_zero_and_restarts_next_turn(clock):
-    """10s → 9s → … → 0s, timeout rule once, then Turno 2 back at 10s."""
+async def test_watch_sleeps_to_the_deadline_and_redraws_only_when_the_turn_changes(clock):
+    """One timeout per expired turn; the HUD is edited on turn change, never per second."""
     state = SimpleNamespace(result=None, turn_deadline=clock.now + turn_clock.TURN_SECONDS)
     turn = {"n": 1}
     expired: list[int] = []
+    sleeps: list[float] = []
 
     async def refresh():
         if turn["n"] > 2:
@@ -59,24 +60,20 @@ async def test_ticker_counts_down_times_out_at_zero_and_restarts_next_turn(clock
         return Tick(Screen(text, "combat", InlineKeyboardMarkup(inline_keyboard=[])), state)
 
     async def expire():
-        # The engine's timeout: the overdue turn is spent and a fresh one opens.
         expired.append(turn["n"])
         turn["n"] += 1
         state.turn_deadline = clock.now + turn_clock.TURN_SECONDS
 
     async def sleep(seconds):
+        sleeps.append(seconds)
         clock.now += seconds
 
     bot = FakeBot()
     await CombatTicker(sleep=sleep)._run(bot, 1, 1, refresh, expire)
 
-    first_turn = [c for c in bot.captions if "Turno 1" in c]
-    shown = [c.rsplit("<code>", 1)[1].removesuffix("</code>") for c in first_turn]
-    assert shown == [f"{n}s" for n in range(10, -1, -1)]
     assert expired == [1, 2]
-    second_turn = [c for c in bot.captions if "Turno 2" in c]
-    assert second_turn[0].endswith("<code>10s</code>")
-    assert second_turn[-1].endswith("<code>0s</code>")
+    assert bot.captions == [turn_line(1, None), turn_line(2, None), turn_line(3, None)]
+    assert sleeps[0] == pytest.approx(turn_clock.TURN_SECONDS + 0.05)
 
 
 async def test_ticker_stops_when_combat_has_no_open_timed_turn(clock):

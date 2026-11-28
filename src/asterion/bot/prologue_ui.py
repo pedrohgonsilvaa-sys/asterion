@@ -13,7 +13,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asterion.bot.creation_ui import Screen
 from asterion.domain.combat import turn_seconds_left
 from asterion.domain.prologue import prologue_enemy_for_name
-from asterion.domain.turn_clock import TURN_SECONDS, format_turn_seconds
 
 SCENE_PREFIX = "pl:"
 COMBAT_ENTRY = "prologue:continue"
@@ -149,14 +148,11 @@ def _hud(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list[str]:
     ]
 
 
-def turn_line(turn: int, seconds_left: float | None) -> str:
-    """Global turn/timer line (Bloco UI 1 §7): ``🌐 Turno N · ⏱️ 10s``.
-
-    The turn number stays visible next to the timer; the timer reads the engine's
-    authoritative deadline and counts down 10s → 0s.
+def turn_line(turn: int, seconds_left: float | None = None) -> str:
+    """Global turn line: ``🌐 Turno N``. The 10 s turn rule is enforced by the engine's
+    deadline and resolved by the silent watch in ``combat_timer``; no countdown is shown.
     """
-    shown = TURN_SECONDS if seconds_left is None else seconds_left
-    return f"🌐 <b>Turno {turn}</b> · ⏱️ <code>{format_turn_seconds(shown)}</code>"
+    return f"🌐 <b>Turno {turn}</b>"
 
 
 prologue_turn_line = turn_line
@@ -266,10 +262,9 @@ def _prologue_card(emoji: str, name: str, hp: Decimal, maximum: Decimal) -> list
     ]
 
 
-def prologue_turn_text(turn: int, seconds_left: float | None) -> str:
-    """``🌐 Turno 1 · ⏱️ 10s`` numa única linha monoespaçada; o tempo vem do motor."""
-    shown = TURN_SECONDS if seconds_left is None else seconds_left
-    return f"<code>🌐 Turno {turn} · ⏱️ {format_turn_seconds(shown)}</code>"
+def prologue_turn_text(turn: int, seconds_left: float | None = None) -> str:
+    """``🌐 Turno 1`` numa única linha monoespaçada (sem contador visível)."""
+    return f"<code>🌐 Turno {turn}</code>"
 
 
 def render_prologue_combat(view, keyboard: InlineKeyboardMarkup | None) -> Screen:
